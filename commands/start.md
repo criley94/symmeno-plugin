@@ -42,11 +42,16 @@ Tools listed as deferred count as existing; load them first (ToolSearch, query
    it. Stop, with the reply "Sign in with /mcp, choose sc, Authenticate, then type /sc:start $ARGUMENTS again.",
    only when the result contains no `http` URL at all, or says this session is remote (then no sign-in can finish
    here). Never ask the person to paste anything, and never call `complete_authentication`.
-4. The person cannot see tool results, only your reply. Put the full sign-in URL from `authenticate`'s result into
-   your reply as plain text, alone on a line of its own, exactly as returned, from `https://` (or `http://`) to its
-   last character, with nothing else on that line: no period, bracket or word after it, because a copied link
-   carries them. Never describe it as "the link" without printing it. Then say: "Open this link and sign in. I
-   will carry on here as soon as the sign-in completes (within 5 minutes)."
+4. Open the sign-in page for the person. Run with Bash:
+   `sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh --open-link "<the URL from authenticate's result, exactly as returned>"`
+   It opens the page in the browser when this session has one (a Mac or a desktop), and otherwise says so. It
+   only ever opens a page on this Symmeno Core; if it refuses, show its output as it is and stop.
+   Then, whatever it printed, the person cannot see tool results, only your reply: put the same full URL into your
+   reply as plain text, alone on a line of its own, exactly as returned, from `https://` (or `http://`) to its
+   last character, with nothing else on that line (no period, bracket or word after it: a copied link carries
+   them). Never write "the link" or "this link" without the URL itself on the line before. Then say: "Sign in on
+   the page that opened (or open the link above). I will carry on here as soon as the sign-in completes (within
+   5 minutes)."
 5. Wait for the sign-in with the Monitor tool, timeout 300 seconds, running exactly:
    `until claude mcp get plugin:sc:sc 2>/dev/null | grep -qi connected; do sleep 3; done`
    When it reports the connection, load `mcp__plugin_sc_sc__whoami` and `mcp__plugin_sc_sc__bootstrap` (ToolSearch,

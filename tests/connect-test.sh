@@ -218,6 +218,29 @@ check "folder mode changed nothing" "$(cmp -s "$CFG/.claude.json" "$OUT/corehost
 connect "$SUB" corehost-replace.log --folder . --replace-user old "$KEY"
 check "--replace-user removes it by the configured Core address" "$([ $rc -eq 0 ] && [ "$(user_servers)" = - ] && echo yes || echo no)"
 
+# 9c. --open-link (0.3.4): opens only the sign-in page on the configured Core; headless says so.
+CORE=$(sh "$ROOT/scripts/set-core-url.sh"); CORE_ORIGIN=${CORE%/mcp}
+AUTH_URL="$CORE_ORIGIN/authorize?response_type=code&client_id=c1&redirect_uri=http%3A%2F%2Flocalhost%3A5%2Fcallback&state=s&code_challenge=x&code_challenge_method=S256&scope=mcp"
+seed openlink "$T"
+connect "$SUB" openlink-headless.log --open-link "$AUTH_URL"
+check "--open-link, no browser: exits 0 and says to open the link yourself" "$([ $rc -eq 0 ] && grep -q 'No browser can be opened' "$OUT/openlink-headless.log" && echo yes || echo no)"
+# A desktop session: a stub xdg-open on PATH records what it was asked to open.
+STUBBIN="$SANDBOX/stubbin"; mkdir -p "$STUBBIN"; printf '#!/bin/sh\nprintf %%s "$1" > "%s/opened.txt"\n' "$SANDBOX" > "$STUBBIN/xdg-open"; chmod +x "$STUBBIN/xdg-open"
+(cd "$SUB" && env -u CLAUDECODE -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_PID \
+    -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN CLAUDE_CODE_ENTRYPOINT=cli DISPLAY=:9 \
+    PATH="$STUBBIN:$PATH" CLAUDE_CONFIG_DIR="$CFG" SYMMENO_CONFIG_DIR="$KEYS" sh "$CONNECT" --open-link "$AUTH_URL") > "$OUT/openlink-desktop.log" 2>&1
+check "--open-link with a browser: says opened, exits 0" "$(grep -q 'Opened the sign-in page' "$OUT/openlink-desktop.log" && echo yes || echo no)"
+check "--open-link with a browser: opened exactly the given URL" "$([ "$(cat "$SANDBOX/opened.txt" 2>/dev/null)" = "$AUTH_URL" ] && echo yes || echo no)"
+rm -f "$SANDBOX/opened.txt"
+for bad in "https://evil.example/authorize?x=1" "$CORE_ORIGIN/anything?x=1" "http://${CORE_ORIGIN#*://}/authorize?x=1" "${CORE_ORIGIN}.evil.example/authorize"; do
+  (cd "$SUB" && env -u CLAUDECODE -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_PID \
+      -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN CLAUDE_CODE_ENTRYPOINT=cli DISPLAY=:9 \
+      PATH="$STUBBIN:$PATH" CLAUDE_CONFIG_DIR="$CFG" SYMMENO_CONFIG_DIR="$KEYS" sh "$CONNECT" --open-link "$bad") > "$OUT/openlink-bad.log" 2>&1
+  rcb=$?
+  check "--open-link refuses $(printf '%s' "$bad" | cut -c1-60): exit 1, nothing opened" "$([ $rcb -eq 1 ] && grep -q 'Nothing was opened' "$OUT/openlink-bad.log" && [ ! -e "$SANDBOX/opened.txt" ] && echo yes || echo no)"
+done
+check "--open-link refuses a missing or extra argument" "$(connect "$SUB" openlink-args.log --open-link; [ $rc -eq 1 ] && echo yes || echo no)"
+
 # 9b. --allow-plugin (0.3): allows the signed-in connection's tools once, touches nothing else.
 seed allowplugin "$T"
 printf '%s\n' '{"theme": "dark", "permissions": {"allow": ["Bash(ls:*)"], "deny": ["Read(/etc/*)"]}}' > "$CFG/settings.json"

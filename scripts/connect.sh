@@ -4,6 +4,7 @@
 # Usage: connect.sh [--folder <crew-folder> [--replace-user <name>]] <key-file>
 #        connect.sh --survey
 #        connect.sh --allow-plugin
+#        connect.sh --open-link <sign-in url>
 #
 # Registers one MCP server named `sc` pointing at Symmeno Core, with a headers
 # helper that reads the team key from <key-file> each time Claude Code connects.
@@ -51,7 +52,7 @@ SETTINGS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
 
 say() { printf '%s\n' "$*"; }
 die() { printf 'connect.sh: %s\n' "$*" >&2; exit 1; }
-usage="usage: connect.sh [--folder <crew-folder> [--replace-user <name>]] <key-file>  (for example ~/.config/symmeno-core/nautilus-team-key), connect.sh --survey, or connect.sh --allow-plugin"
+usage="usage: connect.sh [--folder <crew-folder> [--replace-user <name>]] <key-file>  (for example ~/.config/symmeno-core/nautilus-team-key), connect.sh --survey, connect.sh --allow-plugin, or connect.sh --open-link <sign-in url>"
 
 command -v python3 >/dev/null 2>&1 || die "python3 is needed to read Claude Code's config safely."
 
@@ -175,6 +176,40 @@ fi
 if [ "${1:-}" = "--allow-plugin" ]; then
   [ $# -eq 1 ] || die "$usage"
   allow_tools "$PLUGIN_ALLOW" "plugin tools ($PLUGIN_ALLOW)"
+  exit 0
+fi
+
+# --open-link: open the sign-in page in the person's browser. Only a page on
+# the configured Core's own origin and /authorize path is ever opened; anything
+# else is refused and nothing runs. Without a browser (a headless or SSH
+# session) it says so and exits 0, and /sc:start shows the link instead.
+if [ "${1:-}" = "--open-link" ]; then
+  [ $# -eq 2 ] || die "$usage"
+  verdict=$(python3 -I - "$2" "$CORE_URL" <<'PY'
+import sys
+from urllib.parse import urlparse
+link, core = urlparse(sys.argv[1]), urlparse(sys.argv[2])
+local = core.scheme == "http" and core.hostname in ("localhost", "127.0.0.1")
+if link.scheme != core.scheme or (link.scheme != "https" and not local):
+    print("refused: not an https link")
+elif link.hostname != core.hostname or link.port != core.port:
+    print("refused: not on this Symmeno Core (%s)" % core.netloc)
+elif link.path != "/authorize":
+    print("refused: not the sign-in page")
+else:
+    print("ok")
+PY
+)
+  case "$verdict" in
+    ok) ;;
+    *) die "$verdict. Nothing was opened." ;;
+  esac
+  if [ "$(uname -s 2>/dev/null)" = Darwin ] && command -v open >/dev/null 2>&1; then
+    open "$2" && { say "Opened the sign-in page in your browser."; exit 0; }
+  elif [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$2" >/dev/null 2>&1 && { say "Opened the sign-in page in your browser."; exit 0; }
+  fi
+  say "No browser can be opened from this session; open the sign-in link yourself."
   exit 0
 fi
 

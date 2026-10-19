@@ -10,7 +10,7 @@
     {
       "name": "sc",
       "description": "Start your Symmeno crew in Claude Code: /sc:start and /sc:help, over your Symmeno Core connection.",
-      "version": "0.3.3",
+      "version": "0.3.4",
       "source": "./"
     }
   ]
