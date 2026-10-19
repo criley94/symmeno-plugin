@@ -29,6 +29,9 @@ In Claude Code, type:
 /plugin install sc@symmeno
 ```
 
+When the install asks where to install, pick **Install for you (user scope)**. The plugin holds no key, so it is
+safe in every folder; the connection in step 2 decides which folders reach a crew.
+
 ## 2. Connect Symmeno Core
 
 Until sign-in arrives, one connection reaches one crew, so it lives where that crew works. In a terminal, run the
