@@ -26,7 +26,9 @@ exactly as written here (`sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh ...`, with
 1. Run with Bash: `sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh --survey`
    It prints `here <this folder, or the root of the git repository it is in>`, `here_sc <name or none>`, `user_sc <name or none>`, `other_folders <n>`, one
    `crew <name> <key file>` line per crew key file on this computer, `nested_keys <n>`, `mode user` or
-   `mode folder`, and `here_trust own`, `here_trust inherited <folder above>` or `here_trust none`.
+   `mode folder`, `here_trust own`, `here_trust inherited <folder above>` or `here_trust none`, `app desktop`,
+   `app terminal` or `app unknown` (which Claude Code is running), and `here_scratch yes` or `here_scratch no`
+   (whether this folder is a throwaway workspace of the desktop app rather than a folder the person chose).
 2. If `here_sc` is not `none`, or `user_sc` is `sc`, Symmeno is already set up here but did not load. Reply
    "Symmeno is set up here but did not load. Check that your crew's key file is still in place, then type
    /reload-plugins and /sc:start $ARGUMENTS again." and stop.
@@ -39,7 +41,10 @@ exactly as written here (`sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh ...`, with
 4. Connect.
    - `mode user` (one crew, and no other Symmeno connection on this computer): do not ask. Run with Bash:
      `sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh "<key file>"`
-   - `mode folder` (this computer runs more than one crew, or already has a Symmeno connection elsewhere): ask
+   - `mode folder` (this computer runs more than one crew, or already has a Symmeno connection elsewhere): first,
+     if `app` is `desktop` and `here_scratch` is `yes`, reply "Pick a folder first (Choose... in the desktop app),
+     then /sc:start $ARGUMENTS again." and stop: this session runs in a throwaway workspace, and connecting it
+     would scope the crew to a folder nobody opens again. Otherwise ask
      exactly one question and wait for the answer: "Connect this folder to <crew>?" When `user_sc` is not `none`,
      add: "This also removes the older `<user_sc>` connection, which reached every folder." When `here_trust` is
      `inherited <folder above>`, add: "This also marks <here> as trusted in Claude Code, like <folder above> above
@@ -51,9 +56,14 @@ exactly as written here (`sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh ...`, with
      Every value goes in as its own double-quoted argument, exactly as the survey printed it.
      On no, reply "Nothing was changed." and stop.
 5. If the script exits with an error, show its output as it is and stop.
-6. Reply with exactly "Connected. Type /reload-plugins, then /sc:start <crew and the rest of the words typed>
-   again." If the script printed a line starting with "Note:", add that line. Then stop. The `mcp__sc__` tools
-   appear only after /reload-plugins, so do not look for them in this turn.
+6. Reply with exactly one of these, by the survey's `app` line:
+   - `app terminal`: "Connected. Type /reload-plugins, then /sc:start <crew and the rest of the words typed> again."
+   - `app desktop`: "Connected. Open a new session in this folder, then /sc:start <crew and the rest of the words
+     typed> again." (The desktop app loads a new connection only in a new session; /reload-plugins does not.)
+   - `app unknown`: "Connected. Type /reload-plugins, or open a new session in this folder, then /sc:start <crew
+     and the rest of the words typed> again."
+   If the script printed a line starting with "Note:", add that line. Then stop. The `mcp__sc__` tools appear only
+   after that step, so do not look for them in this turn.
 
 ## 2. No words typed
 

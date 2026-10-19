@@ -42,11 +42,13 @@ with open(path, "w") as f:
 PY
 }
 
-# connect <dir> <log> args...   runs connect.sh in <dir> against $CFG; exit code in $rc
+# connect <dir> <log> args...   runs connect.sh in <dir> against $CFG; exit code in $rc.
+# $APP is the CLAUDE_CODE_ENTRYPOINT the script sees: cli (default), claude-desktop, or none (unset).
 connect() {
   d=$1; log="$OUT/$2"; shift 2
+  if [ "${APP:-cli}" = none ]; then entry="-u CLAUDE_CODE_ENTRYPOINT"; else entry="CLAUDE_CODE_ENTRYPOINT=${APP:-cli}"; fi
   (cd "$d" && env -u CLAUDECODE -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_PID \
-      -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_ENTRYPOINT \
+      -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_DESKTOP_APP_VERSION $entry \
       CLAUDE_CONFIG_DIR="$CFG" SYMMENO_CONFIG_DIR="$KEYS" sh "$CONNECT" "$@") >"$log" 2>&1
   rc=$?
 }
@@ -151,7 +153,44 @@ check "--replace-user on a Core-host entry: says removed" "$(has symmeno.log 'Re
 check "--replace-user on a Core-host entry: user entry gone" "$([ "$(user_servers)" = - ] && echo yes || echo no)"
 check "--replace-user on a Core-host entry: sc registered for the folder" "$([ "$(servers_of "$SUB")" = sc ] && echo yes || echo no)"
 
-# 8. The key never reaches a config, a settings file or any output.
+# 8. The desktop app: a throwaway scratch workspace is refused in folder mode; the
+#    last line says "new session" on desktop, "/reload-plugins" in the terminal, both when unknown.
+SCRATCH="$SANDBOX/scratch-workspace-7f3a"; mkdir -p "$SCRATCH"
+seed desktop-scratch "$T"
+cp "$CFG/.claude.json" "$OUT/desktop-scratch.before"
+APP=claude-desktop connect "$SCRATCH" desktop-survey.log --survey
+check "desktop survey: app desktop" "$(has desktop-survey.log '^app desktop$')"
+check "desktop survey: here_scratch yes for a scratch workspace" "$(has desktop-survey.log '^here_scratch yes$')"
+APP=claude-desktop connect "$SCRATCH" desktop-scratch.log --folder . "$KEY"
+check "desktop + scratch folder: exits 1" "$([ $rc -eq 1 ] && echo yes || echo no)"
+check "desktop + scratch folder: says pick a folder first" "$(has desktop-scratch.log 'Pick a folder first (Choose... in the desktop app), then /sc:start again')"
+check "desktop + scratch folder: config unchanged" "$(cmp -s "$CFG/.claude.json" "$OUT/desktop-scratch.before" && echo yes || echo no)"
+APP=cli connect "$SCRATCH" terminal-survey.log --survey
+check "terminal survey: app terminal" "$(has terminal-survey.log '^app terminal$')"
+APP=cli connect "$SCRATCH" terminal-scratch.log --folder . "$KEY"
+check "terminal + scratch-looking folder: allowed (the person chose it)" "$([ $rc -eq 0 ] && echo yes || echo no)"
+check "terminal: last line says /reload-plugins" "$(has terminal-scratch.log '^Done\. .*type /reload-plugins')"
+# A desktop session in a folder the person chose (mktemp on Linux gives /tmp/tmp.X, which is not scratch-shaped;
+# on macOS mktemp lands in /var/folders, which is, so this case is only meaningful on Linux).
+CHOSEN=$(mktemp -d)
+seed desktop-chosen "$T"
+APP=claude-desktop connect "$CHOSEN" desktop-chosen.log --folder . "$KEY"
+check "desktop + chosen folder: exits 0" "$([ $rc -eq 0 ] && echo yes || echo no)"
+check "desktop + chosen folder: sc registered" "$([ "$(servers_of "$CHOSEN")" = sc ] && echo yes || echo no)"
+check "desktop: last line says open a new session in the folder" "$(has desktop-chosen.log "^Done\. Open a new session in $CHOSEN, then /sc:start")"
+rm -rf "$CHOSEN"
+seed desktop-user "$T"
+APP=claude-desktop connect "$SCRATCH" desktop-user.log "$KEY"
+check "desktop + user scope from a scratch workspace: allowed (no folder involved)" "$([ $rc -eq 0 ] && echo yes || echo no)"
+check "desktop + user scope: sc at user scope" "$([ "$(user_servers)" = sc ] && echo yes || echo no)"
+check "desktop + user scope: last line says open a new session" "$(has desktop-user.log '^Done\. Open a new session in Claude Code, then /sc:start')"
+seed unknown-app "$T"
+APP=none connect "$SCRATCH" unknown-survey.log --survey
+check "no entrypoint: app unknown" "$(has unknown-survey.log '^app unknown$')"
+APP=none connect "$SCRATCH" unknown-user.log "$KEY"
+check "no entrypoint: last line says both /reload-plugins and a new session" "$(has unknown-user.log '^Done\. .*type /reload-plugins, or open a new session')"
+
+# 9. The key never reaches a config, a settings file or any output.
 leaks=$(grep -rl -- "$KEY_TEXT" "$SANDBOX" | grep -v "^$KEY\$" || true)
 check "key text appears nowhere but the key file" "$([ -z "$leaks" ] && echo yes || echo no)"
 [ -n "$leaks" ] && printf '  leaked into: %s\n' $leaks

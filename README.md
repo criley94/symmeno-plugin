@@ -1,6 +1,6 @@
 # Symmeno plugin for Claude Code (`sc`)
 
-Version 0.2.2.
+Version 0.2.3.
 
 Start your Symmeno crew from Claude Code:
 
@@ -44,8 +44,11 @@ The first time in a folder, it connects Symmeno for you instead of starting:
   question says it will be removed. If the folder is not yet trusted in Claude Code but the folder above it is,
   the question says it will mark this folder trusted too (never for a git repository: see below).
 
-Then it tells you the one step to load the new connection: type `/reload-plugins`, then `/sc:start <crew>` again.
-The crew's lead starts.
+Then it tells you the one step to load the new connection: in the terminal, type `/reload-plugins`; in the Claude
+desktop app, open a new session in the same folder. Then `/sc:start <crew>` again, and the crew's lead starts.
+
+In the desktop app, pick the folder first (**Choose...**). A session started without one runs in a throwaway
+workspace, and `/sc:start` refuses to connect that path: it would scope the crew to a folder you never open again.
 
 ## Bringing in teammates
 

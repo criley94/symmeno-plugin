@@ -17,7 +17,8 @@ files, `/sc-bootstrap`, keys or key files.
    - `/sc:start <crew> <teammate>` starts that teammate.
    - Add a project after either: `/sc:start <crew> <project>` or `/sc:start <crew> <teammate> <project>`.
    - First time in a folder, `/sc:start <crew>` connects it (it asks once if this computer runs more than one
-     crew). Then type `/reload-plugins` and `/sc:start <crew>` again.
+     crew). Then type `/reload-plugins` (in the desktop app: open a new session in the folder) and
+     `/sc:start <crew>` again.
 
    **Your crew:** `crew.name` (type `crew.slug`).
 

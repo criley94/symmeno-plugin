@@ -48,10 +48,35 @@ usage="usage: connect.sh [--folder <crew-folder> [--replace-user <name>]] <key-f
 
 command -v python3 >/dev/null 2>&1 || die "python3 is needed to read Claude Code's config safely."
 
+# Which Claude Code is running the script. The desktop app sets
+# CLAUDE_CODE_ENTRYPOINT (the claude binary itself checks these values); the
+# terminal sets "cli". It decides the last line: the desktop app loads a new
+# connection only in a new session, the terminal with /reload-plugins.
+case "${CLAUDE_CODE_ENTRYPOINT:-}" in
+  claude-desktop|claude-desktop-3p|local-agent) APP=desktop ;;
+  "") APP=${CLAUDE_CODE_DESKTOP_APP_VERSION:+desktop}; APP=${APP:-unknown} ;;
+  *) APP=terminal ;;
+esac
+
+# A desktop session started without "Choose..." runs in a throwaway workspace.
+# Connecting that path would scope the crew to a folder nobody will see again.
+is_scratch() {
+  python3 -I - "$1" <<'PY'
+import os, sys
+path = sys.argv[1]
+parts = path.split(os.sep)
+scratch = (any(p.lower().startswith("scratch") for p in parts)
+           or "/Library/Application Support/Claude/" in path + "/"
+           or path.startswith(("/var/folders/", "/private/var/folders/", "/private/tmp/")))
+print("yes" if scratch else "no")
+PY
+}
+
 # --survey: facts only, no change.
 if [ "${1:-}" = "--survey" ]; then
   [ $# -eq 1 ] || die "$usage"
-  python3 -I - "$CLAUDE_JSON" "$SERVER" "$HELPER_DIR" "$(python3 -I "$HERE/trust.py" root "$(pwd -P)")" <<'PY'
+  SURVEY_HERE=$(python3 -I "$HERE/trust.py" root "$(pwd -P)")
+  python3 -I - "$CLAUDE_JSON" "$SERVER" "$HELPER_DIR" "$SURVEY_HERE" <<'PY'
 import glob, json, os, sys
 from urllib.parse import urlparse
 path, server, key_dir, here = sys.argv[1:5]
@@ -90,7 +115,9 @@ print("nested_keys %d" % len(nested))
 one_crew = len(crews) == 1 and not nested and user_sc == "none" and here_sc == "none" and other_folders == 0
 print("mode " + ("user" if one_crew else "folder"))
 PY
-  printf 'here_trust %s\n' "$(python3 -I "$HERE/trust.py" state "$CLAUDE_JSON" "$(python3 -I "$HERE/trust.py" root "$(pwd -P)")")"
+  printf 'here_trust %s\n' "$(python3 -I "$HERE/trust.py" state "$CLAUDE_JSON" "$SURVEY_HERE")"
+  printf 'app %s\n' "$APP"
+  printf 'here_scratch %s\n' "$(is_scratch "$SURVEY_HERE")"
   exit 0
 fi
 
@@ -127,6 +154,9 @@ if [ -n "$FOLDER" ]; then
     WHERE="Claude Code started anywhere in the git repository $FOLDER"
   fi
   RERUN="cd \"$(pwd -P)\" && sh \"$HERE/connect.sh\" --folder . \"$KEY_FILE\""
+  if [ "$APP" = desktop ] && [ "$(is_scratch "$FOLDER")" = yes ]; then
+    die "Pick a folder first (Choose... in the desktop app), then /sc:start again. This session runs in a throwaway workspace, not a folder you chose: $FOLDER. Nothing was changed."
+  fi
 else
   SCOPE=user
   WHERE="every folder on this computer"
@@ -330,9 +360,11 @@ os.replace(tmp, path)
 print(f"Allowed the sc tools in {path}.")
 PY
 
-# A running Claude Code picks up the new connection with /reload-plugins.
-if [ -n "$FOLDER" ]; then
-  say "Done. In Claude Code running in $FOLDER, type /reload-plugins (or start Claude Code there), then /sc:start <crew>."
-else
-  say "Done. In Claude Code, type /reload-plugins (or start Claude Code again), then /sc:start <crew>."
-fi
+# A running terminal Claude Code picks up the new connection with
+# /reload-plugins; the desktop app only in a new session.
+if [ -n "$FOLDER" ]; then AT="in $FOLDER"; else AT="in Claude Code"; fi
+case "$APP" in
+  desktop)  say "Done. Open a new session $AT, then /sc:start <crew>. (The desktop app loads a new connection only in a new session.)" ;;
+  terminal) say "Done. In Claude Code${FOLDER:+ running in $FOLDER}, type /reload-plugins (or start Claude Code again), then /sc:start <crew>." ;;
+  *)        say "Done. In Claude Code${FOLDER:+ running in $FOLDER}, type /reload-plugins, or open a new session, then /sc:start <crew>." ;;
+esac
