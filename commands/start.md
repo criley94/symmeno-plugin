@@ -24,9 +24,9 @@ Never open, read, print or copy a key file. The script below works with key file
 exactly as written here (`sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh ...`, with no quotes around the script path).
 
 1. Run with Bash: `sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh --survey`
-   It prints `here <this folder>`, `here_sc <name or none>`, `user_sc <name or none>`, `other_folders <n>`, one
-   `crew <name> <key file>` line per crew key file on this computer, `nested_keys <n>`, and `mode user` or
-   `mode folder`.
+   It prints `here <this folder, or the root of the git repository it is in>`, `here_sc <name or none>`, `user_sc <name or none>`, `other_folders <n>`, one
+   `crew <name> <key file>` line per crew key file on this computer, `nested_keys <n>`, `mode user` or
+   `mode folder`, and `here_trust own`, `here_trust inherited <folder above>` or `here_trust none`.
 2. If `here_sc` is not `none`, or `user_sc` is `sc`, Symmeno is already set up here but did not load. Reply
    "Symmeno is set up here but did not load. Check that your crew's key file is still in place, then type
    /reload-plugins and /sc:start $ARGUMENTS again." and stop.
@@ -41,11 +41,13 @@ exactly as written here (`sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh ...`, with
      `sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh "<key file>"`
    - `mode folder` (this computer runs more than one crew, or already has a Symmeno connection elsewhere): ask
      exactly one question and wait for the answer: "Connect this folder to <crew>?" When `user_sc` is not `none`,
-     add: "This also removes the older `<user_sc>` connection, which reached every folder." With several crews and
-     no crew typed, ask instead: "Connect this folder to which crew: <the crew names>?"
+     add: "This also removes the older `<user_sc>` connection, which reached every folder." When `here_trust` is
+     `inherited <folder above>`, add: "This also marks this folder as trusted in Claude Code, as <folder above>
+     already is." With several crews and no crew typed, ask "Connect this folder to which crew: <the crew names>?"
+     instead, with the same additions.
      On yes (or a crew name), run with Bash:
-     `sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh --folder "<here>" "<key file>"`, adding
-     `--replace-user <user_sc>` right after `"<here>"` when `user_sc` is not `none`.
+     `sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh --folder . "<key file>"` (from this folder; do not change
+     folder first), adding `--replace-user <user_sc>` right after `--folder .` when `user_sc` is not `none`.
      On no, reply "Nothing was changed." and stop.
 5. If the script exits with an error, show its output as it is and stop.
 6. Reply with exactly "Connected. Type /reload-plugins, then /sc:start <crew and the rest of the words typed>

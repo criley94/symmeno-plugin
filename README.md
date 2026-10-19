@@ -56,16 +56,18 @@ usually start only the lead.
 `/sc:start` runs the plugin's `scripts/connect.sh` for you. You can also run it yourself:
 
 ```
-sh "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/marketplaces/symmeno/scripts/connect.sh" --folder ~/nautilus ~/.config/symmeno-core/nautilus-team-key
+cd ~/nautilus
+sh "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/marketplaces/symmeno/scripts/connect.sh" --folder . ~/.config/symmeno-core/nautilus-team-key
 ```
 
-- `--folder <crew-folder>` connects that folder only; leave it out to connect every folder (only on a computer
-  that will only ever run one crew).
+- `--folder .` connects the folder you are in, and only that one (the script refuses any other folder); leave it
+  out to connect every folder (only on a computer that will only ever run one crew).
 - It registers one Claude Code MCP server named `sc`, installs a small helper at
   `~/.config/symmeno-core/sc-headers` that reads the key file each time Claude Code connects, and allows the `sc`
   tools so memory calls do not ask each time. It never prints the key. Running it again changes nothing.
 - Claude Code reads a folder's key only when that folder is trusted. If a folder above it is trusted, the script
-  marks this folder trusted too; otherwise start Claude Code there once and accept the trust question.
+  marks this folder trusted too, but never across a git repository: a repository inside a trusted folder has to be
+  trusted on its own. Otherwise start Claude Code there once and accept the trust question.
 - If it finds a Symmeno connection that is set up differently, it changes nothing and prints the two lines to fix
   it. Anything you set up to allow `mcp__symmeno__*` tools by name no longer applies; the tools are `mcp__sc__*`.
 - `sh .../connect.sh --survey` shows the crews with key files and the Symmeno connections on this computer,

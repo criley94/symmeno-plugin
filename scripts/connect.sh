@@ -14,12 +14,13 @@
 #                  for a computer that will only ever run one crew.
 #   --folder DIR   only Claude Code started in DIR (local scope). REQUIRED on a
 #                  computer that runs more than one crew, so a crew's key never
-#                  reaches another crew's sessions. If DIR has no trust answer of
-#                  its own but a folder above it is trusted in Claude Code, DIR
-#                  is marked trusted too (Claude Code runs a folder's key helper
-#                  only when that folder itself is marked trusted).
-#   --replace-user NAME  with --folder: first remove the user-scope Symmeno
-#                  entry NAME, which would otherwise reach every folder.
+#                  reaches another crew's sessions. Run it from inside DIR
+#                  (DIR must be the current folder, so `--folder .` works). If DIR
+#                  has no trust answer of its own but a folder above it is trusted
+#                  in Claude Code, DIR is marked trusted too, never across a git
+#                  repository boundary (see trust.py).
+#   --replace-user NAME  with --folder: first remove the user-scope entry NAME
+#                  if it points at Symmeno Core, since it would reach every folder.
 #
 # --survey prints what /sc:start needs to connect the current folder: the crews
 # with a key file (names and paths only), the Symmeno connections already on this
@@ -50,7 +51,7 @@ command -v python3 >/dev/null 2>&1 || die "python3 is needed to read Claude Code
 # --survey: facts only, no change.
 if [ "${1:-}" = "--survey" ]; then
   [ $# -eq 1 ] || die "$usage"
-  python3 -I - "$CLAUDE_JSON" "$SERVER" "$HELPER_DIR" "$(pwd -P)" <<'PY'
+  python3 -I - "$CLAUDE_JSON" "$SERVER" "$HELPER_DIR" "$(python3 -I "$HERE/trust.py" root "$(pwd -P)")" <<'PY'
 import glob, json, os, sys
 from urllib.parse import urlparse
 path, server, key_dir, here = sys.argv[1:5]
@@ -89,6 +90,7 @@ print("nested_keys %d" % len(nested))
 one_crew = len(crews) == 1 and not nested and user_sc == "none" and here_sc == "none" and other_folders == 0
 print("mode " + ("user" if one_crew else "folder"))
 PY
+  printf 'here_trust %s\n' "$(python3 -I "$HERE/trust.py" state "$CLAUDE_JSON" "$(python3 -I "$HERE/trust.py" root "$(pwd -P)")")"
   exit 0
 fi
 
@@ -98,6 +100,7 @@ if [ "${1:-}" = "--folder" ]; then
   [ $# -ge 2 ] || die "$usage"
   [ -d "$2" ] || die "no folder at $2"
   FOLDER=$(cd "$2" && pwd -P)
+  [ "$FOLDER" = "$(pwd -P)" ] || die "run this from inside the folder you connect: cd \"$FOLDER\" && sh \"$HERE/connect.sh\" --folder . <key-file>"
   shift 2
   if [ "${1:-}" = "--replace-user" ]; then
     [ $# -ge 2 ] || die "$usage"
@@ -117,8 +120,13 @@ esac
 
 if [ -n "$FOLDER" ]; then
   SCOPE=local
+  # Inside a git repository Claude Code keeps local settings under its root.
+  FOLDER=$(python3 -I "$HERE/trust.py" root "$FOLDER")
   WHERE="Claude Code started in $FOLDER"
-  RERUN="sh \"$HERE/connect.sh\" --folder \"$FOLDER\" \"$KEY_FILE\""
+  if [ -e "$FOLDER/.git" ]; then
+    WHERE="Claude Code started anywhere in the git repository $FOLDER"
+  fi
+  RERUN="cd \"$(pwd -P)\" && sh \"$HERE/connect.sh\" --folder . \"$KEY_FILE\""
 else
   SCOPE=user
   WHERE="every folder on this computer"
@@ -234,7 +242,7 @@ except (OSError, ValueError):
     cfg = None
 if cfg is None:
     print("absent")
-elif name == server or "symmeno-core" in (urlparse(str(cfg.get("url") or "")).hostname or ""):
+elif "symmeno-core" in (urlparse(str(cfg.get("url") or "")).hostname or ""):
     print("symmeno")
 else:
     print("not-symmeno")
@@ -281,36 +289,10 @@ PY
 fi
 
 # 3b. Folder trust. Claude Code runs a local-scope key helper only in a folder
-#     whose own entry is marked trusted; a folder that inherits trust from a
-#     trusted folder above it has no mark of its own, so mirror that one.
+#     whose own entry is marked trusted; mirror trust inherited from a folder
+#     above, but never across a git repository boundary (trust.py).
 if [ -n "$FOLDER" ]; then
-  python3 -I - "$CLAUDE_JSON" "$FOLDER" <<'PY'
-import json, os, sys
-path, folder = sys.argv[1:3]
-with open(path) as f:
-    config = json.load(f)
-projects = config.get("projects") or {}
-if (projects.get(folder) or {}).get("hasTrustDialogAccepted"):
-    sys.exit(0)
-parent = os.path.dirname(folder)
-while True:
-    if (projects.get(parent) or {}).get("hasTrustDialogAccepted"):
-        break
-    if parent == os.path.dirname(parent):
-        print(f"Note: Claude Code runs the key helper only in a trusted folder. Start Claude Code once in {folder} and accept the trust question.")
-        sys.exit(0)
-    parent = os.path.dirname(parent)
-# Re-read right before writing, so a concurrent Claude Code save is not lost.
-with open(path) as f:
-    config = json.load(f)
-config.setdefault("projects", {}).setdefault(folder, {})["hasTrustDialogAccepted"] = True
-tmp = f"{path}.tmp.{os.getpid()}"
-with open(tmp, "w") as f:
-    json.dump(config, f, indent=2)
-os.chmod(tmp, os.stat(path).st_mode & 0o777)
-os.replace(tmp, path)
-print(f"Marked {folder} as trusted in Claude Code, like {parent} above it.")
-PY
+  python3 -I "$HERE/trust.py" mark "$CLAUDE_JSON" "$FOLDER"
 fi
 
 # 4. Allow the sc tools, once, keeping every other setting.
