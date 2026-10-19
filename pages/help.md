@@ -1,14 +1,12 @@
 # The /sc:help page
 
 Show the person one plain page, built from the steps below. Do not sign anyone in. Do not mention REST, stub
-files, `/sc-bootstrap`, keys or key files; the README is the only place you point to.
+files, `/sc-bootstrap`, keys or key files, except in the "not connected" message.
 
 1. **Check the connection.** You need the tool `mcp__sc__whoami`. If it is listed as deferred, load it first
    (ToolSearch, query `select:mcp__sc__whoami`). If there is no `mcp__sc__whoami` tool at all, Symmeno is not
-   connected on this computer: show only the "How to start" part below, then this line, and stop:
-
-   > Symmeno is not connected on this computer. Connect it with step 2 of the plugin README:
-   > `${CLAUDE_PLUGIN_ROOT}/README.md`
+   connected on this computer: show only the "How to start" part below, then the "not connected" message given at
+   the top of this command, word for word, and stop.
 
 2. **Ask Core.** Call `mcp__sc__whoami` with no arguments. If Core refuses, show its sentence as it is and stop.
 

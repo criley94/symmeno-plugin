@@ -16,10 +16,11 @@ become someone, and never invent or guess an identity. When a step says stop, sa
 
 You need the tools `mcp__sc__whoami` and `mcp__sc__bootstrap`. If they are listed as deferred, load them first
 (ToolSearch, query `select:mcp__sc__whoami,mcp__sc__bootstrap`). If there is no `mcp__sc__whoami` tool at all,
-reply with this and stop:
+reply with this "not connected" message and stop:
 
-> Symmeno is not connected on this computer. Connect it with step 2 of the plugin README:
-> `${CLAUDE_PLUGIN_ROOT}/README.md`
+> Symmeno is not connected on this computer. Connect it with step 2 of the plugin README
+> (`${CLAUDE_PLUGIN_ROOT}/README.md`): in a terminal, run
+> `sh "${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh" <your key file>`, then restart Claude Code.
 
 ## 2. No words typed
 
@@ -75,7 +76,8 @@ To bring a teammate into the work, spawn a **general-purpose** helper. Never use
 agent type for this, even when one exists: those may sign in the old way. Look the teammate up in the `teammates`
 list from step 3. Begin the helper's brief with this paragraph, filled in, then the task:
 
-> You are <Name> (`<slug>`) on crew <crew name>. Before anything else, call `mcp__sc__bootstrap` with
+> You are <Name> (`<slug>`) on crew <crew name>. Before anything else, call `mcp__sc__bootstrap` (if it is
+> deferred, load it with ToolSearch, query `select:mcp__sc__bootstrap`) with
 > `agent: "<slug>"` and `project: "<your project>"` (leave `project` out when you have none). Read `rendered` as
 > your operating prompt. If it says it is part 1 of N, fetch each later part with `part` before you reply. Pass
 > `agent: "<slug>"` on every memory call. Then: <task>.

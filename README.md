@@ -37,7 +37,10 @@ In a terminal, run the connect script that came with the plugin, giving it your 
 sh "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/marketplaces/symmeno/scripts/connect.sh" ~/.config/symmeno-core/nautilus-team-key
 ```
 
-It registers one Claude Code MCP server named `sc` for your user, installs a small helper at
+If that path does not exist on your computer, type `/sc:help` in Claude Code: until Symmeno is connected, it
+prints the exact command with the plugin's own path.
+
+The script registers one Claude Code MCP server named `sc` for your user, installs a small helper at
 `~/.config/symmeno-core/sc-headers` that reads the key file each time Claude Code connects, and allows the `sc`
 tools so memory calls do not ask each time. It never prints the key. Running it again changes nothing.
 
@@ -62,6 +65,7 @@ When a new version is out, type:
 
 ```
 /plugin marketplace update symmeno
+/plugin update sc@symmeno
 ```
 
 Then restart Claude Code. The connection from step 2 does not need to be redone.
