@@ -10,7 +10,7 @@
 #
 # Scope:
 #   (no --folder)  every folder on this computer (Claude Code user scope). Only
-#                  for a computer that one crew uses.
+#                  for a computer that will only ever run one crew.
 #   --folder DIR   only Claude Code started in DIR (local scope). REQUIRED on a
 #                  computer shared by several crews, so a crew's key never
 #                  reaches another crew's sessions.
@@ -20,6 +20,8 @@
 set -eu
 
 CORE_URL="https://deckhouse-489723-symmeno-core-mcp-svc-clfxlhbjsa-uc.a.run.app/mcp"
+# The same Core service under its other Cloud Run address.
+CORE_URL_ALT="https://deckhouse-489723-symmeno-core-mcp-svc-1019921786449.us-central1.run.app/mcp"
 SERVER=sc
 ALLOW='mcp__sc__*'
 
@@ -61,13 +63,20 @@ else
   RERUN="sh \"$HERE/connect.sh\" \"$KEY_FILE\""
 fi
 
+# The helper command stored in the config: two paths, never the key.
+HELPER_CMD=$(python3 -I - "$HELPER" "$KEY_FILE" <<'PY'
+import shlex, sys
+print(shlex.quote(sys.argv[1]) + " " + shlex.quote(sys.argv[2]))
+PY
+)
+
 # 1. Look for an existing Symmeno connection (reads the config; prints names,
 #    scopes and addresses only, never headers). In folder mode a user-scope
 #    Symmeno entry is refused too: it would reach every folder.
-existing=$(python3 -I - "$CLAUDE_JSON" "$SERVER" "$CORE_URL" "$FOLDER" <<'PY'
+existing=$(python3 -I - "$CLAUDE_JSON" "$SERVER" "$CORE_URL" "$CORE_URL_ALT" "$HELPER_CMD" "$FOLDER" <<'PY'
 import json, sys
 from urllib.parse import urlparse
-path, server, url, folder = sys.argv[1:5]
+path, server, url, url_alt, helper_cmd, folder = sys.argv[1:7]
 try:
     with open(path) as f:
         config = json.load(f)
@@ -90,8 +99,11 @@ if folder:
 servers = (here.get("mcpServers") or {}) if folder else user
 mine = servers.get(server)
 if mine is not None:
-    if mine.get("url") == url:
+    if mine.get("url") in (url, url_alt) and mine.get("headersHelper") == helper_cmd:
         print("same\t" + ("trusted" if not folder or here.get("hasTrustDialogAccepted") else "untrusted"))
+    elif mine.get("url") in (url, url_alt):
+        # Never print the stored helper or headers: they could hold a key.
+        print("elsewhere\tthe same Core, with a different key file or key helper")
     else:
         print("elsewhere\t" + str(mine.get("url") or mine.get("command") or "?"))
     sys.exit(0)
@@ -113,6 +125,12 @@ remove_line() {
   fi
 }
 
+multi_crew_hint() {
+  if [ -z "$FOLDER" ]; then
+    say "If this computer runs more than one crew, connect each crew's folder instead: add --folder <crew-folder>."
+  fi
+}
+
 case "$status" in
   unreadable)
     die "could not read $CLAUDE_JSON as JSON. Nothing was changed." ;;
@@ -124,10 +142,11 @@ case "$status" in
     say "  $RERUN"
     exit 1 ;;
   elsewhere)
-    say "An MCP server named \`$SERVER\` already exists for $WHERE and points somewhere else: $detail"
+    say "An MCP server named \`$SERVER\` already exists for $WHERE and is set up differently: $detail"
     say "Nothing was changed. To replace it, run these two lines:"
     remove_line "$SCOPE" "$SERVER"
     say "  $RERUN"
+    multi_crew_hint
     exit 1 ;;
   other)
     say "There is already a Symmeno connection named \`$detail\` for $WHERE."
@@ -135,6 +154,7 @@ case "$status" in
     say "Nothing was changed. To rename it, run these two lines:"
     remove_line "$SCOPE" "$detail"
     say "  $RERUN"
+    multi_crew_hint
     exit 1 ;;
 esac
 
@@ -155,11 +175,10 @@ fi
 if [ "$status" = same ]; then
   say "Symmeno is already connected as \`$SERVER\` for $WHERE ($CORE_URL)."
 else
-  config=$(python3 -I - "$CORE_URL" "$HELPER" "$KEY_FILE" <<'PY'
-import json, shlex, sys
-url, helper, key_file = sys.argv[1:4]
-print(json.dumps({"type": "http", "url": url,
-                  "headersHelper": shlex.quote(helper) + " " + shlex.quote(key_file)}))
+  config=$(python3 -I - "$CORE_URL" "$HELPER_CMD" <<'PY'
+import json, sys
+url, helper_cmd = sys.argv[1:3]
+print(json.dumps({"type": "http", "url": url, "headersHelper": helper_cmd}))
 PY
 )
   if [ -n "$FOLDER" ]; then

@@ -2,7 +2,7 @@
 
 Version 0.1.0.
 
-Start your Symmeno crew from Claude Code:
+Start your Symmeno crew from Claude Code, in your crew's folder:
 
 - `/sc:start <crew>` starts the crew's lead.
 - `/sc:start <crew> <teammate>` starts that teammate.
@@ -31,40 +31,44 @@ In Claude Code, type:
 
 ## 2. Connect Symmeno Core
 
-In a terminal, run the connect script that came with the plugin, giving it your key file.
+Until sign-in arrives, one connection reaches one crew, so it lives where that crew works. In a terminal, run the
+connect script that came with the plugin.
 
-**A computer that several crews share (for example the team VM) must use `--folder`**, so the crew's key reaches
-only sessions started in that crew's folder and never another crew's:
+**A computer that runs more than one crew uses `--folder`.** That is the team VM, and any laptop with folders for
+several crews. Run it once per crew folder, each with that crew's key file. The crew's key then reaches only
+Claude Code started in that crew's folder, never another crew's:
 
 ```
 sh "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/marketplaces/symmeno/scripts/connect.sh" --folder ~/nautilus ~/.config/symmeno-core/nautilus-team-key
 ```
 
-Then `/sc:start` works only in Claude Code started in that exact folder, not in its subfolders. Claude Code runs
-the key helper only in a folder you have trusted: start Claude Code there once and accept the trust question.
+`/sc:start` then works in Claude Code started in that exact folder, not in its subfolders.
 
-**A computer only your crew uses** can connect every folder at once by leaving out `--folder`:
+**A computer that will only ever run one crew** can connect every folder at once by leaving out `--folder`:
 
 ```
 sh "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/marketplaces/symmeno/scripts/connect.sh" ~/.config/symmeno-core/nautilus-team-key
 ```
 
-If that path does not exist on your computer, type `/sc:help` in Claude Code: until Symmeno is connected, it
-prints the exact command with the plugin's own path.
+If the script's path does not exist on your computer, type `/sc:help` in Claude Code: until Symmeno is connected,
+it prints the exact command with the plugin's own path.
 
-The script registers one Claude Code MCP server named `sc` (for that folder, or for your user), installs a small helper at
-`~/.config/symmeno-core/sc-headers` that reads the key file each time Claude Code connects, and allows the `sc`
-tools so memory calls do not ask each time. It never prints the key. Running it again changes nothing.
+The script registers one Claude Code MCP server named `sc` (for that folder, or for your user), installs a small
+helper at `~/.config/symmeno-core/sc-headers` that reads the key file each time Claude Code connects, and allows
+the `sc` tools so memory calls do not ask each time. It never prints the key. Running it again changes nothing.
 
 **If it says there is already a Symmeno connection** (for example one named `symmeno`, or one for every folder
-while you asked for one folder), it changes nothing and prints two lines: one removes the old entry, the other re-runs the script. Run them both. Anything you
-set up to allow `mcp__symmeno__*` tools by name no longer applies; the tools are now `mcp__sc__*`.
+while you asked for one folder), it changes nothing and prints two lines: one removes the old entry, the other
+re-runs the script. Run them both. Anything you set up to allow `mcp__symmeno__*` tools by name no longer applies;
+the tools are now `mcp__sc__*`. A crew folder that already has its own `sc` for the right crew needs nothing.
 
-## 3. Restart and check
+## 3. Open the crew folder and check
 
-1. Quit Claude Code and start it again (in the crew folder, if you used `--folder`).
-2. Type `/mcp`. `sc` shows connected.
-3. Type `/sc:start <crew>`, for example `/sc:start nautilus`. The crew's lead starts.
+1. Quit Claude Code, then start it in the crew folder (any folder, if you connected without `--folder`).
+2. If Claude Code asks whether you trust this folder, say yes. Claude Code reads the key only in a trusted folder,
+   so the connection fails until you do.
+3. Type `/mcp`. `sc` shows connected.
+4. Type `/sc:start <crew>`, for example `/sc:start nautilus`. The crew's lead starts.
 
 ## Bringing in teammates
 

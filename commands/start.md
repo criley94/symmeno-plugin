@@ -16,12 +16,12 @@ become someone, and never invent or guess an identity. When a step says stop, sa
 
 You need the tools `mcp__sc__whoami` and `mcp__sc__bootstrap`. If they are listed as deferred, load them first
 (ToolSearch, query `select:mcp__sc__whoami,mcp__sc__bootstrap`). If there is no `mcp__sc__whoami` tool at all,
-reply with this "not connected" message and stop:
+reply with this "not connected" message, with the current working directory in place of `<this folder>`, and stop:
 
-> Symmeno is not connected on this computer. Connect it with step 2 of the plugin README
-> (`${CLAUDE_PLUGIN_ROOT}/README.md`): in a terminal, run
-> `sh "${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh" <your key file>`, then restart Claude Code. On a computer that
-> several crews share, add `--folder <your crew's folder>` before the key file and start Claude Code there.
+> Symmeno is not connected in this folder. Start Claude Code in your crew's folder, or connect this folder in a
+> terminal with `sh "${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh" --folder "<this folder>" <your crew's key file>`,
+> then restart Claude Code here. Step 2 of the plugin README has the details:
+> `${CLAUDE_PLUGIN_ROOT}/README.md`
 
 ## 2. No words typed
 

@@ -5,9 +5,9 @@ allowed-tools: mcp__sc__whoami, ToolSearch
 
 The "not connected" message:
 
-> Symmeno is not connected on this computer. Connect it with step 2 of the plugin README
-> (`${CLAUDE_PLUGIN_ROOT}/README.md`): in a terminal, run
-> `sh "${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh" <your key file>`, then restart Claude Code. On a computer that
-> several crews share, add `--folder <your crew's folder>` before the key file and start Claude Code there.
+> Symmeno is not connected in this folder. Start Claude Code in your crew's folder, or connect this folder in a
+> terminal with `sh "${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh" --folder "<this folder>" <your crew's key file>`,
+> then restart Claude Code here. Step 2 of the plugin README has the details:
+> `${CLAUDE_PLUGIN_ROOT}/README.md`
 
 @${CLAUDE_PLUGIN_ROOT}/pages/help.md
