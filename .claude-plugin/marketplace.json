@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "symmeno",
+  "description": "Marketplace for the Symmeno Claude Code plugin",
+  "owner": {
+    "name": "Cheston Riley",
+    "email": "cheston.riley@hands-onanalytics.com"
+  },
+  "plugins": [
+    {
+      "name": "sc",
+      "description": "Start your Symmeno crew in Claude Code: /sc:start and /sc:help, over your Symmeno Core connection.",
+      "version": "0.1.0",
+      "source": "./"
+    }
+  ]
+}

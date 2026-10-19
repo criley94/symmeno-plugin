@@ -1,0 +1,20 @@
+#!/bin/sh
+# Symmeno Core headers helper. Claude Code runs it before connecting to `sc`.
+# Usage: sc-headers <key-file>. Prints {"Authorization": "Bearer <key>"} on stdout
+# and nothing else. The key stays in its file; it is never an argument or a variable
+# in Claude Code's config, and this script never writes it anywhere but stdout.
+key_file="${1:-}"
+if [ -z "$key_file" ]; then
+  echo "sc-headers: no key file given (usage: sc-headers <key-file>)" >&2
+  exit 2
+fi
+if [ ! -r "$key_file" ]; then
+  echo "sc-headers: key file not found or not readable: $key_file" >&2
+  exit 1
+fi
+key=$(tr -d ' \t\r\n' < "$key_file")
+if [ -z "$key" ]; then
+  echo "sc-headers: key file is empty: $key_file" >&2
+  exit 1
+fi
+printf '{"Authorization": "Bearer %s"}\n' "$key"
