@@ -1,6 +1,6 @@
 # Symmeno plugin for Claude Code (`sc`)
 
-Version 0.3.0.
+Version 0.3.1.
 
 Start your Symmeno crew from Claude Code:
 
@@ -35,6 +35,10 @@ The first time on this computer it shows a sign-in link. Open it, sign in with y
 the crew's lead starts in the same conversation. From then on, `/sc:start <crew>` works in any folder with no
 sign-in and no question. Your sign-in stays where Claude Code keeps it (the keychain on a Mac); the plugin never
 sees it.
+
+That first run also allows the Symmeno tools (`mcp__plugin_sc_sc__*`) in your own Claude Code settings, for every
+folder on this computer, so your crew can read and write its memory without asking you each time. That is right for
+a computer that is yours alone; on a shared computer, use crew keys instead (below).
 
 `/sc:start` only starts crews you are a member of. One Claude session starts one crew; for another crew, open a new
 session.

@@ -190,15 +190,19 @@ check "no entrypoint: app unknown" "$(has unknown-survey.log '^app unknown$')"
 APP=none connect "$SCRATCH" unknown-user.log "$KEY"
 check "no entrypoint: last line says both /reload-plugins and a new session" "$(has unknown-user.log '^Done\. .*type /reload-plugins, or open a new session')"
 
-# 9. Shared-machine marker (0.3): the survey says so, by the marker file only.
+# 9. Shared-machine marker (0.3): the survey says so, by the marker file only. Both cases
+#    point the marker path into the sandbox, so the host's own marker never decides a result.
 seed shared "$T"
-connect "$SUB" shared-no.log --survey
+survey_with_marker() {  # survey_with_marker <marker-path> <log>
+  (cd "$SUB" && env -u CLAUDECODE -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_PID \
+      -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN CLAUDE_CODE_ENTRYPOINT=cli \
+      CLAUDE_CONFIG_DIR="$CFG" SYMMENO_CONFIG_DIR="$KEYS" SYMMENO_SHARED_MARKER="$1" \
+      sh "$CONNECT" --survey) > "$OUT/$2" 2>&1
+}
+survey_with_marker "$SANDBOX/no-such-marker" shared-no.log
 check "survey: shared no without the marker" "$(has shared-no.log '^shared no$')"
 : > "$SANDBOX/shared-machine"
-(cd "$SUB" && env -u CLAUDECODE -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_PID \
-    -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN CLAUDE_CODE_ENTRYPOINT=cli \
-    CLAUDE_CONFIG_DIR="$CFG" SYMMENO_CONFIG_DIR="$KEYS" SYMMENO_SHARED_MARKER="$SANDBOX/shared-machine" \
-    sh "$CONNECT" --survey) > "$OUT/shared-yes.log" 2>&1
+survey_with_marker "$SANDBOX/shared-machine" shared-yes.log
 check "survey: shared yes with the marker" "$(has shared-yes.log '^shared yes$')"
 
 # 9b. --allow-plugin (0.3): allows the signed-in connection's tools once, touches nothing else.
@@ -240,6 +244,15 @@ check "set-core-url.sh rewrites connect.sh (on a copy)" "$([ "$(sh "$COPY/script
 check "set-core-url.sh rewrites .mcp.json to the same URL (on a copy)" "$([ "$(python3 -I -c "import json,sys; print(json.load(open(sys.argv[1]))['mcpServers']['sc']['url'])" "$COPY/.mcp.json")" = "https://trial.example.invalid/mcp" ] && echo yes || echo no)"
 check "set-core-url.sh refuses a URL that is not https://.../mcp" "$(sh "$COPY/scripts/set-core-url.sh" "http://evil.example/x" >/dev/null 2>&1 && echo no || echo yes)"
 check "the real repo's URL is untouched" "$([ "$(sh "$ROOT/scripts/set-core-url.sh")" = "$SH_URL" ] && echo yes || echo no)"
+# Release check: what main publishes points at production Core, never a trial or localhost URL left
+# by set-core-url.sh. Other branches (a trial build) may point elsewhere, but only over https.
+PROD_URL="https://deckhouse-489723-symmeno-core-mcp-svc-clfxlhbjsa-uc.a.run.app/mcp"
+BRANCH=$(git -C "$ROOT" branch --show-current 2>/dev/null || echo "")
+if [ "$BRANCH" = main ]; then
+  check "release: main's .mcp.json URL is production Core" "$([ "$MCP_URL" = "$PROD_URL" ] && echo yes || echo no)"
+else
+  check "release: this branch's .mcp.json URL is https (branch: ${BRANCH:-none})" "$(case "$MCP_URL" in https://*/mcp) echo yes ;; *) echo no ;; esac)"
+fi
 
 # 11. The key never reaches a config, a settings file or any output.
 leaks=$(grep -rl -- "$KEY_TEXT" "$SANDBOX" | grep -v "^$KEY\$" || true)
