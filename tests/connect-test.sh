@@ -190,7 +190,58 @@ check "no entrypoint: app unknown" "$(has unknown-survey.log '^app unknown$')"
 APP=none connect "$SCRATCH" unknown-user.log "$KEY"
 check "no entrypoint: last line says both /reload-plugins and a new session" "$(has unknown-user.log '^Done\. .*type /reload-plugins, or open a new session')"
 
-# 9. The key never reaches a config, a settings file or any output.
+# 9. Shared-machine marker (0.3): the survey says so, by the marker file only.
+seed shared "$T"
+connect "$SUB" shared-no.log --survey
+check "survey: shared no without the marker" "$(has shared-no.log '^shared no$')"
+: > "$SANDBOX/shared-machine"
+(cd "$SUB" && env -u CLAUDECODE -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_PID \
+    -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN CLAUDE_CODE_ENTRYPOINT=cli \
+    CLAUDE_CONFIG_DIR="$CFG" SYMMENO_CONFIG_DIR="$KEYS" SYMMENO_SHARED_MARKER="$SANDBOX/shared-machine" \
+    sh "$CONNECT" --survey) > "$OUT/shared-yes.log" 2>&1
+check "survey: shared yes with the marker" "$(has shared-yes.log '^shared yes$')"
+
+# 9b. --allow-plugin (0.3): allows the signed-in connection's tools once, touches nothing else.
+seed allowplugin "$T"
+printf '%s\n' '{"theme": "dark", "permissions": {"allow": ["Bash(ls:*)"], "deny": ["Read(/etc/*)"]}}' > "$CFG/settings.json"
+cp "$CFG/.claude.json" "$OUT/allowplugin.before"
+connect "$SUB" allowplugin.log --allow-plugin
+check "--allow-plugin: exits 0" "$([ $rc -eq 0 ] && echo yes || echo no)"
+check "--allow-plugin: says it allowed the plugin tools" "$(has allowplugin.log 'Allowed the plugin')"
+check "--allow-plugin: rule added, other settings kept" "$(python3 -I - "$CFG/settings.json" <<'PY'
+import json, sys
+s = json.load(open(sys.argv[1]))
+ok = (s.get("theme") == "dark" and s["permissions"]["deny"] == ["Read(/etc/*)"]
+      and s["permissions"]["allow"] == ["Bash(ls:*)", "mcp__plugin_sc_sc__*"])
+print("yes" if ok else "no")
+PY
+)"
+check "--allow-plugin: .claude.json untouched" "$(cmp -s "$CFG/.claude.json" "$OUT/allowplugin.before" && echo yes || echo no)"
+connect "$SUB" allowplugin2.log --allow-plugin
+check "--allow-plugin twice: says already allowed" "$(has allowplugin2.log 'already allowed')"
+check "--allow-plugin twice: rule not duplicated" "$([ "$(python3 -I -c "import json,sys; print(json.load(open(sys.argv[1]))['permissions']['allow'].count('mcp__plugin_sc_sc__*'))" "$CFG/settings.json")" = 1 ] && echo yes || echo no)"
+check "--allow-plugin: refuses extra arguments" "$(connect "$SUB" allowplugin3.log --allow-plugin extra; [ $rc -eq 1 ] && echo yes || echo no)"
+
+# 10. The bundled connection and connect.sh name the same Core, byte for byte; set-core-url.sh keeps it so.
+MCP_URL=$(python3 -I -c "import json,sys; print(json.load(open(sys.argv[1]))['mcpServers']['sc']['url'])" "$ROOT/.mcp.json")
+SH_URL=$(sh "$ROOT/scripts/set-core-url.sh")
+check ".mcp.json url == connect.sh CORE_URL" "$([ -n "$MCP_URL" ] && [ "$MCP_URL" = "$SH_URL" ] && echo yes || echo no)"
+check ".mcp.json has exactly one server, named sc, type http, no headers and no secrets" "$(python3 -I - "$ROOT/.mcp.json" <<'PY'
+import json, sys
+c = json.load(open(sys.argv[1]))
+s = c.get("mcpServers") or {}
+ok = list(s) == ["sc"] and s["sc"].get("type") == "http" and set(s["sc"]) == {"type", "url"}
+print("yes" if ok else "no")
+PY
+)"
+COPY="$SANDBOX/repo-copy"; mkdir -p "$COPY/scripts"; cp "$ROOT/.mcp.json" "$COPY/"; cp "$ROOT/scripts/connect.sh" "$ROOT/scripts/set-core-url.sh" "$COPY/scripts/"
+sh "$COPY/scripts/set-core-url.sh" "https://trial.example.invalid/mcp" >/dev/null
+check "set-core-url.sh rewrites connect.sh (on a copy)" "$([ "$(sh "$COPY/scripts/set-core-url.sh")" = "https://trial.example.invalid/mcp" ] && echo yes || echo no)"
+check "set-core-url.sh rewrites .mcp.json to the same URL (on a copy)" "$([ "$(python3 -I -c "import json,sys; print(json.load(open(sys.argv[1]))['mcpServers']['sc']['url'])" "$COPY/.mcp.json")" = "https://trial.example.invalid/mcp" ] && echo yes || echo no)"
+check "set-core-url.sh refuses a URL that is not https://.../mcp" "$(sh "$COPY/scripts/set-core-url.sh" "http://evil.example/x" >/dev/null 2>&1 && echo no || echo yes)"
+check "the real repo's URL is untouched" "$([ "$(sh "$ROOT/scripts/set-core-url.sh")" = "$SH_URL" ] && echo yes || echo no)"
+
+# 11. The key never reaches a config, a settings file or any output.
 leaks=$(grep -rl -- "$KEY_TEXT" "$SANDBOX" | grep -v "^$KEY\$" || true)
 check "key text appears nowhere but the key file" "$([ -z "$leaks" ] && echo yes || echo no)"
 [ -n "$leaks" ] && printf '  leaked into: %s\n' $leaks

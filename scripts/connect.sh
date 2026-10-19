@@ -3,6 +3,7 @@
 #
 # Usage: connect.sh [--folder <crew-folder> [--replace-user <name>]] <key-file>
 #        connect.sh --survey
+#        connect.sh --allow-plugin
 #
 # Registers one MCP server named `sc` pointing at Symmeno Core, with a headers
 # helper that reads the team key from <key-file> each time Claude Code connects.
@@ -35,6 +36,12 @@ CORE_URL="https://deckhouse-489723-symmeno-core-mcp-svc-clfxlhbjsa-uc.a.run.app/
 CORE_URL_ALT="https://deckhouse-489723-symmeno-core-mcp-svc-1019921786449.us-central1.run.app/mcp"
 SERVER=sc
 ALLOW='mcp__sc__*'
+# The plugin's own signed-in connection registers as plugin:sc:sc, so its tools
+# carry this prefix. --allow-plugin allows them once, before the sign-in.
+PLUGIN_ALLOW='mcp__plugin_sc_sc__*'
+# A shared computer (the agent VM) never signs a person in: /sc:start sees
+# `shared yes` in --survey and uses crew keys instead. Root creates the file.
+SHARED_MARKER="${SYMMENO_SHARED_MARKER:-/etc/symmeno/shared-machine}"
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 HELPER_DIR="${SYMMENO_CONFIG_DIR:-$HOME/.config/symmeno-core}"
@@ -44,7 +51,7 @@ SETTINGS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
 
 say() { printf '%s\n' "$*"; }
 die() { printf 'connect.sh: %s\n' "$*" >&2; exit 1; }
-usage="usage: connect.sh [--folder <crew-folder> [--replace-user <name>]] <key-file>  (for example ~/.config/symmeno-core/nautilus-team-key), or connect.sh --survey"
+usage="usage: connect.sh [--folder <crew-folder> [--replace-user <name>]] <key-file>  (for example ~/.config/symmeno-core/nautilus-team-key), connect.sh --survey, or connect.sh --allow-plugin"
 
 command -v python3 >/dev/null 2>&1 || die "python3 is needed to read Claude Code's config safely."
 
@@ -69,6 +76,45 @@ scratch = (any(p.lower().startswith("scratch") for p in parts)
            or "/Library/Application Support/Claude/" in path + "/"
            or path.startswith(("/var/folders/", "/private/var/folders/", "/private/tmp/")))
 print("yes" if scratch else "no")
+PY
+}
+
+# allow_tools <rule> <what>: allow one tool rule in Claude Code's settings, once,
+# keeping every other setting. Says what it did; a settings file it cannot
+# read safely is left alone with the line to add.
+allow_tools() {
+  python3 -I - "$SETTINGS" "$1" "$2" <<'PY'
+import json, os, sys
+path, rule, what = sys.argv[1:4]
+try:
+    with open(path) as f:
+        settings = json.load(f)
+except FileNotFoundError:
+    settings = {}
+except (OSError, ValueError):
+    print(f"{path} is not valid JSON, so it was left alone. Add this to its permissions.allow list: \"{rule}\"")
+    sys.exit(0)
+if not isinstance(settings, dict):
+    print(f"{path} is not a JSON object, so it was left alone. Add this to its permissions.allow list: \"{rule}\"")
+    sys.exit(0)
+perms = settings.setdefault("permissions", {})
+allow = perms.setdefault("allow", []) if isinstance(perms, dict) else None
+if not isinstance(allow, list):
+    print(f"{path} has an unexpected permissions shape, so it was left alone. Add this to its permissions.allow list: \"{rule}\"")
+    sys.exit(0)
+if rule in allow:
+    print(f"The {what} are already allowed in {path}.")
+    sys.exit(0)
+allow.append(rule)
+os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+tmp = f"{path}.tmp.{os.getpid()}"
+with open(tmp, "w") as f:
+    json.dump(settings, f, indent=2)
+    f.write("\n")
+if os.path.exists(path):
+    os.chmod(tmp, os.stat(path).st_mode & 0o777)
+os.replace(tmp, path)
+print(f"Allowed the {what} in {path}.")
 PY
 }
 
@@ -118,6 +164,15 @@ PY
   printf 'here_trust %s\n' "$(python3 -I "$HERE/trust.py" state "$CLAUDE_JSON" "$SURVEY_HERE")"
   printf 'app %s\n' "$APP"
   printf 'here_scratch %s\n' "$(is_scratch "$SURVEY_HERE")"
+  if [ -e "$SHARED_MARKER" ]; then printf 'shared yes\n'; else printf 'shared no\n'; fi
+  exit 0
+fi
+
+# --allow-plugin: before the plugin's sign-in, allow its tools once. Nothing
+# else is read or written.
+if [ "${1:-}" = "--allow-plugin" ]; then
+  [ $# -eq 1 ] || die "$usage"
+  allow_tools "$PLUGIN_ALLOW" "plugin tools ($PLUGIN_ALLOW)"
   exit 0
 fi
 
@@ -326,39 +381,7 @@ if [ -n "$FOLDER" ]; then
 fi
 
 # 4. Allow the sc tools, once, keeping every other setting.
-python3 -I - "$SETTINGS" "$ALLOW" <<'PY'
-import json, os, sys
-path, rule = sys.argv[1:3]
-try:
-    with open(path) as f:
-        settings = json.load(f)
-except FileNotFoundError:
-    settings = {}
-except (OSError, ValueError):
-    print(f"{path} is not valid JSON, so it was left alone. Add this to its permissions.allow list: \"{rule}\"")
-    sys.exit(0)
-if not isinstance(settings, dict):
-    print(f"{path} is not a JSON object, so it was left alone. Add this to its permissions.allow list: \"{rule}\"")
-    sys.exit(0)
-perms = settings.setdefault("permissions", {})
-allow = perms.setdefault("allow", []) if isinstance(perms, dict) else None
-if not isinstance(allow, list):
-    print(f"{path} has an unexpected permissions shape, so it was left alone. Add this to its permissions.allow list: \"{rule}\"")
-    sys.exit(0)
-if rule in allow:
-    print(f"The sc tools are already allowed in {path}.")
-    sys.exit(0)
-allow.append(rule)
-os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-tmp = f"{path}.tmp.{os.getpid()}"
-with open(tmp, "w") as f:
-    json.dump(settings, f, indent=2)
-    f.write("\n")
-if os.path.exists(path):
-    os.chmod(tmp, os.stat(path).st_mode & 0o777)
-os.replace(tmp, path)
-print(f"Allowed the sc tools in {path}.")
-PY
+allow_tools "$ALLOW" "sc tools"
 
 # A running terminal Claude Code picks up the new connection with
 # /reload-plugins; the desktop app only in a new session.
@@ -368,3 +391,4 @@ case "$APP" in
   terminal) say "Done. In Claude Code${FOLDER:+ running in $FOLDER}, type /reload-plugins (or start Claude Code again), then /sc:start <crew>." ;;
   *)        say "Done. In Claude Code${FOLDER:+ running in $FOLDER}, type /reload-plugins, or open a new session, then /sc:start <crew>." ;;
 esac
+exit 0
