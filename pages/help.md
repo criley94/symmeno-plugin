@@ -1,12 +1,12 @@
 # The /sc:help page
 
 Show the person one plain page, built from the steps below. Do not sign anyone in. Do not mention REST, stub
-files, `/sc-bootstrap`, keys or key files, except in the "not connected" message.
+files, `/sc-bootstrap`, keys or key files.
 
 1. **Check the connection.** You need the tool `mcp__sc__whoami`. If it is listed as deferred, load it first
    (ToolSearch, query `select:mcp__sc__whoami`). If there is no `mcp__sc__whoami` tool at all, Symmeno is not
-   connected in this folder: show only the "How to start" part below, then the "not connected" message given at
-   the top of this command, word for word except the current working directory in place of `<this folder>`, and stop.
+   connected in this folder: show only the "How to start" part below, then "Symmeno is not connected in this
+   folder yet.", and stop.
 
 2. **Ask Core.** Call `mcp__sc__whoami` with no arguments. If Core refuses, show its sentence as it is and stop.
 
@@ -16,6 +16,8 @@ files, `/sc-bootstrap`, keys or key files, except in the "not connected" message
    - `/sc:start <crew>` starts the crew's lead.
    - `/sc:start <crew> <teammate>` starts that teammate.
    - Add a project after either: `/sc:start <crew> <project>` or `/sc:start <crew> <teammate> <project>`.
+   - First time in a folder, `/sc:start <crew>` connects it (it asks once if this computer runs more than one
+     crew). Then type `/reload-plugins` and `/sc:start <crew>` again.
 
    **Your crew:** `crew.name` (type `crew.slug`).
 

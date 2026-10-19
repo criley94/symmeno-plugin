@@ -1,24 +1,22 @@
 # Symmeno plugin for Claude Code (`sc`)
 
-Version 0.1.0.
+Version 0.2.0.
 
-Start your Symmeno crew from Claude Code, in your crew's folder:
+Start your Symmeno crew from Claude Code:
 
 - `/sc:start <crew>` starts the crew's lead.
 - `/sc:start <crew> <teammate>` starts that teammate.
 - Add a project after either: `/sc:start nautilus lena portside`.
 - `/sc:help` shows these forms, your crew, its teammates and its recent projects.
 
-The plugin carries the two commands. The connection to Symmeno Core is a separate, one-time step (step 2), so the
-team key stays in a file on your computer and never in the plugin.
-
 ## Before you start
 
-- Claude Code is installed, and `python3` is on your PATH (the connect script uses it to read Claude Code's config).
+- Claude Code is installed, and `python3` is on your PATH.
 - git on this computer can clone `criley94/symmeno-plugin`. The repo is private: today this plugin is for Team
   Nautilus only.
-- Your team key file is on this computer, readable only by you. For Nautilus it is
-  `~/.config/symmeno-core/nautilus-team-key`. Do not open it or paste it anywhere.
+- Your crew's key file is on this computer, readable only by you, at `~/.config/symmeno-core/<crew>-team-key`
+  (for Nautilus, `~/.config/symmeno-core/nautilus-team-key`). Do not open it or paste it anywhere. The plugin
+  never holds a key; it only points Claude Code at that file.
 
 ## 1. Install the plugin
 
@@ -30,53 +28,51 @@ In Claude Code, type:
 ```
 
 When the install asks where to install, pick **Install for you (user scope)**. The plugin holds no key, so it is
-safe in every folder; the connection in step 2 decides which folders reach a crew.
+safe in every folder. Then type `/reload-plugins`.
 
-## 2. Connect Symmeno Core
+## 2. Start your crew
 
-Until sign-in arrives, one connection reaches one crew, so it lives where that crew works. In a terminal, run the
-connect script that came with the plugin.
+In any folder, type `/sc:start <crew>`, for example `/sc:start nautilus`.
 
-**A computer that runs more than one crew uses `--folder`.** That is the team VM, and any laptop with folders for
-several crews. Run it once per crew folder, each with that crew's key file. The crew's key then reaches only
-Claude Code started in that crew's folder, never another crew's:
+The first time in a folder, it connects Symmeno for you instead of starting:
 
-```
-sh "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/marketplaces/symmeno/scripts/connect.sh" --folder ~/nautilus ~/.config/symmeno-core/nautilus-team-key
-```
+- **If this computer has one crew's key file and no other Symmeno connection**, it connects every folder at once,
+  without asking.
+- **If this computer runs more than one crew**, it asks one question, "Connect this folder to <crew>?", and connects
+  only this folder. Until sign-in arrives, one connection reaches one crew, so a crew's key never reaches another
+  crew's folders. If an older Symmeno connection covers every folder (for example one named `symmeno`), the
+  question says it will be removed.
 
-`/sc:start` then works in Claude Code started in that exact folder, not in its subfolders.
-
-**A computer that will only ever run one crew** can connect every folder at once by leaving out `--folder`:
-
-```
-sh "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/marketplaces/symmeno/scripts/connect.sh" ~/.config/symmeno-core/nautilus-team-key
-```
-
-If the script's path does not exist on your computer, type `/sc:help` in Claude Code: until Symmeno is connected,
-it prints the exact command with the plugin's own path.
-
-The script registers one Claude Code MCP server named `sc` (for that folder, or for your user), installs a small
-helper at `~/.config/symmeno-core/sc-headers` that reads the key file each time Claude Code connects, and allows
-the `sc` tools so memory calls do not ask each time. It never prints the key. Running it again changes nothing.
-
-**If it says there is already a Symmeno connection** (for example one named `symmeno`, or one for every folder
-while you asked for one folder), it changes nothing and prints two lines: one removes the old entry, the other
-re-runs the script. Run them both. Anything you set up to allow `mcp__symmeno__*` tools by name no longer applies;
-the tools are now `mcp__sc__*`. A crew folder that already has its own `sc` for the right crew needs nothing.
-
-## 3. Open the crew folder and check
-
-1. Quit Claude Code, then start it in the crew folder (any folder, if you connected without `--folder`).
-2. If Claude Code asks whether you trust this folder, say yes. Claude Code reads the key only in a trusted folder,
-   so the connection fails until you do.
-3. Type `/mcp`. `sc` shows connected.
-4. Type `/sc:start <crew>`, for example `/sc:start nautilus`. The crew's lead starts.
+Then it tells you the one step to load the new connection: type `/reload-plugins`, then `/sc:start <crew>` again.
+The crew's lead starts.
 
 ## Bringing in teammates
 
 Ask the lead. It brings teammates in by itself, signed in through the same connection, on the same project. You
 usually start only the lead.
+
+## Connecting from a terminal (optional)
+
+`/sc:start` runs the plugin's `scripts/connect.sh` for you. You can also run it yourself:
+
+```
+sh "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/marketplaces/symmeno/scripts/connect.sh" --folder ~/nautilus ~/.config/symmeno-core/nautilus-team-key
+```
+
+- `--folder <crew-folder>` connects that folder only; leave it out to connect every folder (only on a computer
+  that will only ever run one crew).
+- It registers one Claude Code MCP server named `sc`, installs a small helper at
+  `~/.config/symmeno-core/sc-headers` that reads the key file each time Claude Code connects, and allows the `sc`
+  tools so memory calls do not ask each time. It never prints the key. Running it again changes nothing.
+- Claude Code reads a folder's key only when that folder is trusted. If a folder above it is trusted, the script
+  marks this folder trusted too; otherwise start Claude Code there once and accept the trust question.
+- If it finds a Symmeno connection that is set up differently, it changes nothing and prints the two lines to fix
+  it. Anything you set up to allow `mcp__symmeno__*` tools by name no longer applies; the tools are `mcp__sc__*`.
+- `sh .../connect.sh --survey` shows the crews with key files and the Symmeno connections on this computer,
+  without changing anything.
+
+If a folder was connected before and `/sc:start` says Symmeno did not load, check that the crew's key file is still
+in place: without it the connection fails with an error that looks like a Core or sign-in problem.
 
 ## Updating
 
@@ -87,7 +83,7 @@ When a new version is out, type:
 /plugin update sc@symmeno
 ```
 
-Then restart Claude Code. The connection from step 2 does not need to be redone.
+Then type `/reload-plugins`. Connections do not need to be redone.
 
 ## For invitees (not yet)
 

@@ -1,7 +1,8 @@
 #!/bin/sh
 # Connect Claude Code to Symmeno Core.
 #
-# Usage: connect.sh [--folder <crew-folder>] <key-file>
+# Usage: connect.sh [--folder <crew-folder> [--replace-user <name>]] <key-file>
+#        connect.sh --survey
 #
 # Registers one MCP server named `sc` pointing at Symmeno Core, with a headers
 # helper that reads the team key from <key-file> each time Claude Code connects.
@@ -12,8 +13,17 @@
 #   (no --folder)  every folder on this computer (Claude Code user scope). Only
 #                  for a computer that will only ever run one crew.
 #   --folder DIR   only Claude Code started in DIR (local scope). REQUIRED on a
-#                  computer shared by several crews, so a crew's key never
-#                  reaches another crew's sessions.
+#                  computer that runs more than one crew, so a crew's key never
+#                  reaches another crew's sessions. If DIR has no trust answer of
+#                  its own but a folder above it is trusted in Claude Code, DIR
+#                  is marked trusted too (Claude Code runs a folder's key helper
+#                  only when that folder itself is marked trusted).
+#   --replace-user NAME  with --folder: first remove the user-scope Symmeno
+#                  entry NAME, which would otherwise reach every folder.
+#
+# --survey prints what /sc:start needs to connect the current folder: the crews
+# with a key file (names and paths only), the Symmeno connections already on this
+# computer, and whether to connect one folder or every folder. It changes nothing.
 #
 # The key is never read, printed, or stored by this script. The Claude Code
 # config holds only two paths: the helper's and the key file's.
@@ -33,18 +43,70 @@ SETTINGS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
 
 say() { printf '%s\n' "$*"; }
 die() { printf 'connect.sh: %s\n' "$*" >&2; exit 1; }
-usage="usage: connect.sh [--folder <crew-folder>] <key-file>  (for example ~/.config/symmeno-core/nautilus-team-key)"
+usage="usage: connect.sh [--folder <crew-folder> [--replace-user <name>]] <key-file>  (for example ~/.config/symmeno-core/nautilus-team-key), or connect.sh --survey"
+
+command -v python3 >/dev/null 2>&1 || die "python3 is needed to read Claude Code's config safely."
+
+# --survey: facts only, no change.
+if [ "${1:-}" = "--survey" ]; then
+  [ $# -eq 1 ] || die "$usage"
+  python3 -I - "$CLAUDE_JSON" "$SERVER" "$HELPER_DIR" "$(pwd -P)" <<'PY'
+import glob, json, os, sys
+from urllib.parse import urlparse
+path, server, key_dir, here = sys.argv[1:5]
+try:
+    with open(path) as f:
+        config = json.load(f)
+except FileNotFoundError:
+    config = {}
+except (OSError, ValueError):
+    print("error could not read Claude Code's config as JSON")
+    sys.exit(0)
+
+def symmeno(name, cfg):
+    return name == server or "symmeno-core" in (urlparse(str(cfg.get("url") or "")).hostname or "")
+
+user_sc = next((n for n, c in (config.get("mcpServers") or {}).items() if symmeno(n, c)), "none")
+here_sc, other_folders = "none", 0
+for folder, proj in (config.get("projects") or {}).items():
+    entries = [n for n, c in (proj.get("mcpServers") or {}).items() if symmeno(n, c)]
+    if not entries:
+        continue
+    if folder == here:
+        here_sc = entries[0]
+    else:
+        other_folders += 1
+# Crews are named by their key files; the files themselves are never opened.
+crews = sorted(glob.glob(os.path.join(key_dir, "*-team-key")))
+nested = [p for p in glob.glob(os.path.join(key_dir, "**", "*-team-key"), recursive=True) if p not in crews]
+print("here " + here)
+print("here_sc " + here_sc)
+print("user_sc " + user_sc)
+print("other_folders %d" % other_folders)
+for p in crews:
+    print("crew %s %s" % (os.path.basename(p)[: -len("-team-key")], p))
+print("nested_keys %d" % len(nested))
+one_crew = len(crews) == 1 and not nested and user_sc == "none" and here_sc == "none" and other_folders == 0
+print("mode " + ("user" if one_crew else "folder"))
+PY
+  exit 0
+fi
 
 FOLDER=
+REPLACE_USER=
 if [ "${1:-}" = "--folder" ]; then
   [ $# -ge 2 ] || die "$usage"
   [ -d "$2" ] || die "no folder at $2"
   FOLDER=$(cd "$2" && pwd -P)
   shift 2
+  if [ "${1:-}" = "--replace-user" ]; then
+    [ $# -ge 2 ] || die "$usage"
+    REPLACE_USER=$2
+    shift 2
+  fi
 fi
 [ $# -eq 1 ] || die "$usage"
 command -v claude >/dev/null 2>&1 || die "Claude Code (the claude command) is not on PATH."
-command -v python3 >/dev/null 2>&1 || die "python3 is needed to read Claude Code's config safely."
 
 case "$1" in
   /*) KEY_FILE="$1" ;;
@@ -73,10 +135,10 @@ PY
 # 1. Look for an existing Symmeno connection (reads the config; prints names,
 #    scopes and addresses only, never headers). In folder mode a user-scope
 #    Symmeno entry is refused too: it would reach every folder.
-existing=$(python3 -I - "$CLAUDE_JSON" "$SERVER" "$CORE_URL" "$CORE_URL_ALT" "$HELPER_CMD" "$FOLDER" <<'PY'
+existing=$(python3 -I - "$CLAUDE_JSON" "$SERVER" "$CORE_URL" "$CORE_URL_ALT" "$HELPER_CMD" "$FOLDER" "$REPLACE_USER" <<'PY'
 import json, sys
 from urllib.parse import urlparse
-path, server, url, url_alt, helper_cmd, folder = sys.argv[1:7]
+path, server, url, url_alt, helper_cmd, folder, replace_user = sys.argv[1:8]
 try:
     with open(path) as f:
         config = json.load(f)
@@ -93,14 +155,14 @@ user = config.get("mcpServers") or {}
 here = ((config.get("projects") or {}).get(folder) or {}) if folder else {}
 if folder:
     for name, cfg in user.items():
-        if name == server or symmeno(cfg):
+        if name != replace_user and (name == server or symmeno(cfg)):
             print("userwide\t" + name)
             sys.exit(0)
 servers = (here.get("mcpServers") or {}) if folder else user
 mine = servers.get(server)
 if mine is not None:
     if mine.get("url") in (url, url_alt) and mine.get("headersHelper") == helper_cmd:
-        print("same\t" + ("trusted" if not folder or here.get("hasTrustDialogAccepted") else "untrusted"))
+        print("same\t-")
     elif mine.get("url") in (url, url_alt):
         # Never print the stored helper or headers: they could hold a key.
         print("elsewhere\tthe same Core, with a different key file or key helper")
@@ -111,7 +173,7 @@ for name, cfg in servers.items():
     if symmeno(cfg):
         print("other\t" + name)
         sys.exit(0)
-print("none\t" + ("trusted" if not folder or here.get("hasTrustDialogAccepted") else "untrusted"))
+print("none\t-")
 PY
 )
 status=${existing%%"$(printf '\t')"*}
@@ -136,7 +198,7 @@ case "$status" in
     die "could not read $CLAUDE_JSON as JSON. Nothing was changed." ;;
   userwide)
     say "This computer has a Symmeno connection for every folder (\`$detail\`, user scope)."
-    say "On a computer shared by several crews, each crew's connection belongs in its own folder."
+    say "On a computer that runs more than one crew, each crew's connection belongs in its own folder."
     say "Nothing was changed. To move it, run these two lines:"
     remove_line user "$detail"
     say "  $RERUN"
@@ -157,6 +219,35 @@ case "$status" in
     multi_crew_hint
     exit 1 ;;
 esac
+
+# 2a. --replace-user: now that the checks passed, remove the named user-scope
+#     entry, but only a Symmeno one.
+if [ -n "$REPLACE_USER" ]; then
+  kind=$(python3 -I - "$CLAUDE_JSON" "$SERVER" "$REPLACE_USER" <<'PY'
+import json, sys
+from urllib.parse import urlparse
+path, server, name = sys.argv[1:4]
+try:
+    with open(path) as f:
+        cfg = (json.load(f).get("mcpServers") or {}).get(name)
+except (OSError, ValueError):
+    cfg = None
+if cfg is None:
+    print("absent")
+elif name == server or "symmeno-core" in (urlparse(str(cfg.get("url") or "")).hostname or ""):
+    print("symmeno")
+else:
+    print("not-symmeno")
+PY
+)
+  case "$kind" in
+    symmeno)
+      claude mcp remove --scope user "$REPLACE_USER" >/dev/null
+      say "Removed the Symmeno connection \`$REPLACE_USER\` that reached every folder." ;;
+    absent) ;;
+    *) die "\`$REPLACE_USER\` is not a Symmeno connection, so it was left alone. Nothing was changed." ;;
+  esac
+fi
 
 # 2. Install the headers helper at a stable path (the plugin's own folder
 #    changes with every version).
@@ -188,8 +279,38 @@ PY
   fi
   say "Connected Symmeno as \`$SERVER\` for $WHERE ($CORE_URL)."
 fi
-if [ "$detail" = untrusted ]; then
-  say "Note: Claude Code runs the key helper only in a trusted folder. Start Claude Code once in $FOLDER and accept the trust question."
+
+# 3b. Folder trust. Claude Code runs a local-scope key helper only in a folder
+#     whose own entry is marked trusted; a folder that inherits trust from a
+#     trusted folder above it has no mark of its own, so mirror that one.
+if [ -n "$FOLDER" ]; then
+  python3 -I - "$CLAUDE_JSON" "$FOLDER" <<'PY'
+import json, os, sys
+path, folder = sys.argv[1:3]
+with open(path) as f:
+    config = json.load(f)
+projects = config.get("projects") or {}
+if (projects.get(folder) or {}).get("hasTrustDialogAccepted"):
+    sys.exit(0)
+parent = os.path.dirname(folder)
+while True:
+    if (projects.get(parent) or {}).get("hasTrustDialogAccepted"):
+        break
+    if parent == os.path.dirname(parent):
+        print(f"Note: Claude Code runs the key helper only in a trusted folder. Start Claude Code once in {folder} and accept the trust question.")
+        sys.exit(0)
+    parent = os.path.dirname(parent)
+# Re-read right before writing, so a concurrent Claude Code save is not lost.
+with open(path) as f:
+    config = json.load(f)
+config.setdefault("projects", {}).setdefault(folder, {})["hasTrustDialogAccepted"] = True
+tmp = f"{path}.tmp.{os.getpid()}"
+with open(tmp, "w") as f:
+    json.dump(config, f, indent=2)
+os.chmod(tmp, os.stat(path).st_mode & 0o777)
+os.replace(tmp, path)
+print(f"Marked {folder} as trusted in Claude Code, like {parent} above it.")
+PY
 fi
 
 # 4. Allow the sc tools, once, keeping every other setting.
@@ -227,8 +348,9 @@ os.replace(tmp, path)
 print(f"Allowed the sc tools in {path}.")
 PY
 
+# A running Claude Code picks up the new connection with /reload-plugins.
 if [ -n "$FOLDER" ]; then
-  say "Done. Start Claude Code in $FOLDER (restart it if it is open there), type /mcp and check that sc shows connected, then type /sc:start <crew>."
+  say "Done. In Claude Code running in $FOLDER, type /reload-plugins (or start Claude Code there), then /sc:start <crew>."
 else
-  say "Done. Restart Claude Code, type /mcp and check that sc shows connected, then type /sc:start <crew>."
+  say "Done. In Claude Code, type /reload-plugins (or start Claude Code again), then /sc:start <crew>."
 fi

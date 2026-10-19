@@ -1,7 +1,7 @@
 ---
 description: Start your Symmeno crew's lead, or a named teammate, from Symmeno Core
 argument-hint: <crew> [teammate] [project]
-allowed-tools: mcp__sc__whoami, mcp__sc__bootstrap, ToolSearch
+allowed-tools: mcp__sc__whoami, mcp__sc__bootstrap, ToolSearch, Bash(sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh:*)
 ---
 
 # Start a Symmeno teammate
@@ -15,15 +15,42 @@ become someone, and never invent or guess an identity. When a step says stop, sa
 ## 1. Check the connection
 
 You need the tools `mcp__sc__whoami` and `mcp__sc__bootstrap`. If they are listed as deferred, load them first
-(ToolSearch, query `select:mcp__sc__whoami,mcp__sc__bootstrap`). If there is no `mcp__sc__whoami` tool at all,
-reply with this "not connected" message, with the current working directory in place of `<this folder>`, and stop:
+(ToolSearch, query `select:mcp__sc__whoami,mcp__sc__bootstrap`). If there is no `mcp__sc__whoami` tool at all, this
+folder is not connected yet: do "Connecting this folder" below instead of the other steps, then stop.
 
-> Symmeno is not connected in this folder. Start Claude Code in your crew's folder, or connect this folder in a
-> terminal with `sh "${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh" --folder "<this folder>" <your crew's key file>`,
-> then restart Claude Code here. If this folder was connected before, check that your crew's key file is still in
-> place: without it the connection fails with an error that looks like a Core or sign-in problem. Step 2 of the
-> plugin README has the details:
-> `${CLAUDE_PLUGIN_ROOT}/README.md`
+## Connecting this folder (only when step 1 sends you here)
+
+Never open, read, print or copy a key file. The script below works with key file names and paths only. Run it
+exactly as written here (`sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh ...`, with no quotes around the script path).
+
+1. Run with Bash: `sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh --survey`
+   It prints `here <this folder>`, `here_sc <name or none>`, `user_sc <name or none>`, `other_folders <n>`, one
+   `crew <name> <key file>` line per crew key file on this computer, `nested_keys <n>`, and `mode user` or
+   `mode folder`.
+2. If `here_sc` is not `none`, or `user_sc` is `sc`, Symmeno is already set up here but did not load. Reply
+   "Symmeno is set up here but did not load. Check that your crew's key file is still in place, then type
+   /reload-plugins and /sc:start $ARGUMENTS again." and stop.
+3. Pick the crew.
+   - No `crew` lines: reply "There is no Symmeno key file on this computer. Your crew's key file goes in
+     ~/.config/symmeno-core/; ask the person who manages your team's Symmeno account for it." and stop.
+   - A word 1 was typed: use the `crew` line whose name equals it, ignoring case. If none does, reply "This
+     computer has key files for: <the crew names>. Type /sc:start with one of them." and stop.
+   - No words typed: use the only crew if there is one. With several, step 4's question asks which.
+4. Connect.
+   - `mode user` (one crew, and no other Symmeno connection on this computer): do not ask. Run with Bash:
+     `sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh "<key file>"`
+   - `mode folder` (this computer runs more than one crew, or already has a Symmeno connection elsewhere): ask
+     exactly one question and wait for the answer: "Connect this folder to <crew>?" When `user_sc` is not `none`,
+     add: "This also removes the older `<user_sc>` connection, which reached every folder." With several crews and
+     no crew typed, ask instead: "Connect this folder to which crew: <the crew names>?"
+     On yes (or a crew name), run with Bash:
+     `sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh --folder "<here>" "<key file>"`, adding
+     `--replace-user <user_sc>` right after `"<here>"` when `user_sc` is not `none`.
+     On no, reply "Nothing was changed." and stop.
+5. If the script exits with an error, show its output as it is and stop.
+6. Reply with exactly "Connected. Type /reload-plugins, then /sc:start <crew and the rest of the words typed>
+   again." If the script printed a line starting with "Note:", add that line. Then stop. The `mcp__sc__` tools
+   appear only after /reload-plugins, so do not look for them in this turn.
 
 ## 2. No words typed
 
