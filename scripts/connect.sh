@@ -31,7 +31,7 @@
 # config holds only two paths: the helper's and the key file's.
 set -eu
 
-CORE_URL="https://deckhouse-489723-symmeno-core-mcp-svc-clfxlhbjsa-uc.a.run.app/mcp"
+CORE_URL="https://core-trial-698809613891.us-central1.run.app/mcp"
 # The same Core service under its other Cloud Run address.
 CORE_URL_ALT="https://deckhouse-489723-symmeno-core-mcp-svc-1019921786449.us-central1.run.app/mcp"
 SERVER=sc

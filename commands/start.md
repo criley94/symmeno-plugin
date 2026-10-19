@@ -40,8 +40,10 @@ Tools listed as deferred count as existing; load them first (ToolSearch, query
 3. Call `mcp__plugin_sc_sc__authenticate` with no arguments. It returns a sign-in link.
    - If its text says the session is remote, or asks for a URL or code to be pasted back, do not ask the person for
      anything. Reply "Sign in with /mcp, choose sc, Authenticate, then type /sc:start $ARGUMENTS again." and stop.
-4. Show the link on its own line and say: "Open this link and sign in. I will carry on here as soon as the sign-in
-   completes (within 5 minutes)."
+4. The person cannot see tool results, only your reply. Copy the full sign-in URL from `authenticate`'s result into
+   your reply as plain text, on a line of its own, exactly as returned, from `https://` (or `http://`) to its last
+   character; never describe it as "the link" without printing it. Then say: "Open this link and sign in. I will
+   carry on here as soon as the sign-in completes (within 5 minutes)."
 5. Wait for the sign-in with the Monitor tool, timeout 300 seconds, running exactly:
    `until claude mcp get plugin:sc:sc 2>/dev/null | grep -qi connected; do sleep 3; done`
    When it reports the connection, load `mcp__plugin_sc_sc__whoami` and `mcp__plugin_sc_sc__bootstrap` (ToolSearch,
@@ -62,8 +64,9 @@ exactly as written here (`sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh ...`, with
    (whether this folder is a throwaway workspace of the desktop app rather than a folder the person chose), and
    `shared yes` or `shared no` (whether this computer is marked as shared).
 2. If `here_sc` is not `none`, or `user_sc` is `sc`, Symmeno is already set up here but did not load. Reply
-   "Symmeno is set up here but did not load. Check that your crew's key file is still in place, then type
-   /reload-plugins and /sc:start $ARGUMENTS again." and stop.
+   "Symmeno is set up here but did not load. Check that your crew's key file is still in place, then type /mcp,
+   choose sc, pick Reconnect, and type /sc:start $ARGUMENTS again." and stop. (Reconnect also clears a stale
+   sign-in record that Claude Code keeps after one failed key read; /reload-plugins alone does not.)
 3. Pick the crew.
    - No `crew` lines: reply "There is no Symmeno key file on this computer. Your crew's key file goes in
      ~/.config/symmeno-core/; ask the person who manages your team's Symmeno account for it." and stop.

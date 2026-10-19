@@ -2,7 +2,7 @@
   "mcpServers": {
     "sc": {
       "type": "http",
-      "url": "https://deckhouse-489723-symmeno-core-mcp-svc-clfxlhbjsa-uc.a.run.app/mcp"
+      "url": "https://core-trial-698809613891.us-central1.run.app/mcp"
     }
   }
 }
