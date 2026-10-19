@@ -2,7 +2,7 @@
 
 Version 0.1.0.
 
-Start your Symmeno crew from any folder:
+Start your Symmeno crew from Claude Code:
 
 - `/sc:start <crew>` starts the crew's lead.
 - `/sc:start <crew> <teammate>` starts that teammate.
@@ -31,7 +31,19 @@ In Claude Code, type:
 
 ## 2. Connect Symmeno Core
 
-In a terminal, run the connect script that came with the plugin, giving it your key file:
+In a terminal, run the connect script that came with the plugin, giving it your key file.
+
+**A computer that several crews share (for example the team VM) must use `--folder`**, so the crew's key reaches
+only sessions started in that crew's folder and never another crew's:
+
+```
+sh "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/marketplaces/symmeno/scripts/connect.sh" --folder ~/nautilus ~/.config/symmeno-core/nautilus-team-key
+```
+
+Then `/sc:start` works only in Claude Code started in that exact folder, not in its subfolders. Claude Code runs
+the key helper only in a folder you have trusted: start Claude Code there once and accept the trust question.
+
+**A computer only your crew uses** can connect every folder at once by leaving out `--folder`:
 
 ```
 sh "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/marketplaces/symmeno/scripts/connect.sh" ~/.config/symmeno-core/nautilus-team-key
@@ -40,17 +52,17 @@ sh "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/marketplaces/symmeno/scripts/con
 If that path does not exist on your computer, type `/sc:help` in Claude Code: until Symmeno is connected, it
 prints the exact command with the plugin's own path.
 
-The script registers one Claude Code MCP server named `sc` for your user, installs a small helper at
+The script registers one Claude Code MCP server named `sc` (for that folder, or for your user), installs a small helper at
 `~/.config/symmeno-core/sc-headers` that reads the key file each time Claude Code connects, and allows the `sc`
 tools so memory calls do not ask each time. It never prints the key. Running it again changes nothing.
 
-**If it says this computer already has a Symmeno connection** (for example one named `symmeno`), it changes
-nothing and prints two lines: one removes the old entry, the other re-runs the script. Run them both. Anything you
+**If it says there is already a Symmeno connection** (for example one named `symmeno`, or one for every folder
+while you asked for one folder), it changes nothing and prints two lines: one removes the old entry, the other re-runs the script. Run them both. Anything you
 set up to allow `mcp__symmeno__*` tools by name no longer applies; the tools are now `mcp__sc__*`.
 
 ## 3. Restart and check
 
-1. Quit Claude Code and start it again.
+1. Quit Claude Code and start it again (in the crew folder, if you used `--folder`).
 2. Type `/mcp`. `sc` shows connected.
 3. Type `/sc:start <crew>`, for example `/sc:start nautilus`. The crew's lead starts.
 

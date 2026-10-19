@@ -1,12 +1,19 @@
 #!/bin/sh
-# Connect this computer's Claude Code to Symmeno Core.
+# Connect Claude Code to Symmeno Core.
 #
-# Usage: connect.sh <key-file>
+# Usage: connect.sh [--folder <crew-folder>] <key-file>
 #
-# Registers one MCP server named `sc`, at user scope, pointing at Symmeno Core,
-# with a headers helper that reads the team key from <key-file> each time Claude
-# Code connects. Then allows the `sc` tools in ~/.claude/settings.json so memory
-# calls do not prompt. Safe to run again: a second run changes nothing.
+# Registers one MCP server named `sc` pointing at Symmeno Core, with a headers
+# helper that reads the team key from <key-file> each time Claude Code connects.
+# Then allows the `sc` tools in ~/.claude/settings.json so memory calls do not
+# prompt. Safe to run again: a second run changes nothing.
+#
+# Scope:
+#   (no --folder)  every folder on this computer (Claude Code user scope). Only
+#                  for a computer that one crew uses.
+#   --folder DIR   only Claude Code started in DIR (local scope). REQUIRED on a
+#                  computer shared by several crews, so a crew's key never
+#                  reaches another crew's sessions.
 #
 # The key is never read, printed, or stored by this script. The Claude Code
 # config holds only two paths: the helper's and the key file's.
@@ -24,8 +31,16 @@ SETTINGS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
 
 say() { printf '%s\n' "$*"; }
 die() { printf 'connect.sh: %s\n' "$*" >&2; exit 1; }
+usage="usage: connect.sh [--folder <crew-folder>] <key-file>  (for example ~/.config/symmeno-core/nautilus-team-key)"
 
-[ $# -eq 1 ] || die "usage: connect.sh <key-file>  (for example ~/.config/symmeno-core/nautilus-team-key)"
+FOLDER=
+if [ "${1:-}" = "--folder" ]; then
+  [ $# -ge 2 ] || die "$usage"
+  [ -d "$2" ] || die "no folder at $2"
+  FOLDER=$(cd "$2" && pwd -P)
+  shift 2
+fi
+[ $# -eq 1 ] || die "$usage"
 command -v claude >/dev/null 2>&1 || die "Claude Code (the claude command) is not on PATH."
 command -v python3 >/dev/null 2>&1 || die "python3 is needed to read Claude Code's config safely."
 
@@ -36,49 +51,90 @@ esac
 [ -f "$KEY_FILE" ] || die "no key file at $KEY_FILE"
 [ -s "$KEY_FILE" ] || die "the key file is empty: $KEY_FILE"
 
-# 1. Look for an existing Symmeno connection at user scope (reads the config;
-#    prints names and addresses only, never headers).
-existing=$(python3 -I - "$CLAUDE_JSON" "$SERVER" "$CORE_URL" <<'PY'
+if [ -n "$FOLDER" ]; then
+  SCOPE=local
+  WHERE="Claude Code started in $FOLDER"
+  RERUN="sh \"$HERE/connect.sh\" --folder \"$FOLDER\" \"$KEY_FILE\""
+else
+  SCOPE=user
+  WHERE="every folder on this computer"
+  RERUN="sh \"$HERE/connect.sh\" \"$KEY_FILE\""
+fi
+
+# 1. Look for an existing Symmeno connection (reads the config; prints names,
+#    scopes and addresses only, never headers). In folder mode a user-scope
+#    Symmeno entry is refused too: it would reach every folder.
+existing=$(python3 -I - "$CLAUDE_JSON" "$SERVER" "$CORE_URL" "$FOLDER" <<'PY'
 import json, sys
 from urllib.parse import urlparse
-path, server, url = sys.argv[1:4]
+path, server, url, folder = sys.argv[1:5]
 try:
     with open(path) as f:
-        servers = json.load(f).get("mcpServers") or {}
+        config = json.load(f)
 except FileNotFoundError:
-    servers = {}
+    config = {}
 except (OSError, ValueError):
     print("unreadable")
     sys.exit(0)
+
+def symmeno(cfg):
+    return "symmeno-core" in (urlparse(str(cfg.get("url") or "")).hostname or "")
+
+user = config.get("mcpServers") or {}
+here = ((config.get("projects") or {}).get(folder) or {}) if folder else {}
+if folder:
+    for name, cfg in user.items():
+        if name == server or symmeno(cfg):
+            print("userwide\t" + name)
+            sys.exit(0)
+servers = (here.get("mcpServers") or {}) if folder else user
 mine = servers.get(server)
 if mine is not None:
-    print("same" if mine.get("url") == url else "elsewhere " + str(mine.get("url") or mine.get("command") or "?"))
+    if mine.get("url") == url:
+        print("same\t" + ("trusted" if not folder or here.get("hasTrustDialogAccepted") else "untrusted"))
+    else:
+        print("elsewhere\t" + str(mine.get("url") or mine.get("command") or "?"))
     sys.exit(0)
 for name, cfg in servers.items():
-    host = urlparse(str(cfg.get("url") or "")).hostname or ""
-    if "symmeno-core" in host:
-        print("other " + name)
+    if symmeno(cfg):
+        print("other\t" + name)
         sys.exit(0)
-print("none")
+print("none\t" + ("trusted" if not folder or here.get("hasTrustDialogAccepted") else "untrusted"))
 PY
 )
+status=${existing%%"$(printf '\t')"*}
+detail=${existing#*"$(printf '\t')"}
 
-case "$existing" in
+remove_line() {
+  if [ "$1" = user ]; then
+    say "  claude mcp remove --scope user $2"
+  else
+    say "  (cd \"$FOLDER\" && claude mcp remove --scope local $2)"
+  fi
+}
+
+case "$status" in
   unreadable)
     die "could not read $CLAUDE_JSON as JSON. Nothing was changed." ;;
-  "elsewhere "*)
-    say "An MCP server named \`$SERVER\` already exists and points somewhere else: ${existing#elsewhere }"
-    say "Nothing was changed. To replace it, run these two lines:"
-    say "  claude mcp remove --scope user $SERVER"
-    say "  sh \"$HERE/connect.sh\" \"$KEY_FILE\""
+  userwide)
+    say "This computer has a Symmeno connection for every folder (\`$detail\`, user scope)."
+    say "On a computer shared by several crews, each crew's connection belongs in its own folder."
+    say "Nothing was changed. To move it, run these two lines:"
+    remove_line user "$detail"
+    say "  $RERUN"
     exit 1 ;;
-  "other "*)
-    name=${existing#other }
-    say "This computer already has a Symmeno connection named \`$name\`."
+  elsewhere)
+    say "An MCP server named \`$SERVER\` already exists for $WHERE and points somewhere else: $detail"
+    say "Nothing was changed. To replace it, run these two lines:"
+    remove_line "$SCOPE" "$SERVER"
+    say "  $RERUN"
+    exit 1 ;;
+  other)
+    say "There is already a Symmeno connection named \`$detail\` for $WHERE."
     say "Symmeno's start text uses tools named mcp__sc__*, so the connection must be named \`sc\`."
     say "Nothing was changed. To rename it, run these two lines:"
-    say "  claude mcp remove --scope user $name"
-    say "  sh \"$HERE/connect.sh\" \"$KEY_FILE\""
+    remove_line "$SCOPE" "$detail"
+    say "  $RERUN"
     exit 1 ;;
 esac
 
@@ -95,9 +151,9 @@ else
   say "Installed the headers helper: $HELPER"
 fi
 
-# 3. Register `sc` at user scope.
-if [ "$existing" = same ]; then
-  say "Symmeno is already connected as \`$SERVER\` ($CORE_URL)."
+# 3. Register `sc` (user scope, or local scope in the crew folder).
+if [ "$status" = same ]; then
+  say "Symmeno is already connected as \`$SERVER\` for $WHERE ($CORE_URL)."
 else
   config=$(python3 -I - "$CORE_URL" "$HELPER" "$KEY_FILE" <<'PY'
 import json, shlex, sys
@@ -106,8 +162,15 @@ print(json.dumps({"type": "http", "url": url,
                   "headersHelper": shlex.quote(helper) + " " + shlex.quote(key_file)}))
 PY
 )
-  claude mcp add-json --scope user "$SERVER" "$config" >/dev/null
-  say "Connected Symmeno as \`$SERVER\` at user scope ($CORE_URL)."
+  if [ -n "$FOLDER" ]; then
+    (cd "$FOLDER" && claude mcp add-json --scope local "$SERVER" "$config" >/dev/null)
+  else
+    claude mcp add-json --scope user "$SERVER" "$config" >/dev/null
+  fi
+  say "Connected Symmeno as \`$SERVER\` for $WHERE ($CORE_URL)."
+fi
+if [ "$detail" = untrusted ]; then
+  say "Note: Claude Code runs the key helper only in a trusted folder. Start Claude Code once in $FOLDER and accept the trust question."
 fi
 
 # 4. Allow the sc tools, once, keeping every other setting.
@@ -145,4 +208,8 @@ os.replace(tmp, path)
 print(f"Allowed the sc tools in {path}.")
 PY
 
-say "Done. Restart Claude Code, type /mcp and check that sc shows connected, then type /sc:start <crew>."
+if [ -n "$FOLDER" ]; then
+  say "Done. Start Claude Code in $FOLDER (restart it if it is open there), type /mcp and check that sc shows connected, then type /sc:start <crew>."
+else
+  say "Done. Restart Claude Code, type /mcp and check that sc shows connected, then type /sc:start <crew>."
+fi
