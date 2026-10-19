@@ -205,6 +205,19 @@ check "survey: shared no without the marker" "$(has shared-no.log '^shared no$')
 survey_with_marker "$SANDBOX/shared-machine" shared-yes.log
 check "survey: shared yes with the marker" "$(has shared-yes.log '^shared yes$')"
 
+# 9a. A user-wide entry at the configured Core address counts as Symmeno whatever its name and even when the
+#     host does not contain "symmeno-core" (a trial Core): the survey reports it and folder mode refuses.
+seed corehost "$T" old "$(sh "$ROOT/scripts/set-core-url.sh")"
+connect "$SUB" corehost-survey.log --survey
+check "survey: user_sc names a user-wide entry at the configured Core address" "$(has corehost-survey.log '^user_sc old$')"
+cp "$CFG/.claude.json" "$OUT/corehost.before"
+connect "$SUB" corehost-folder.log --folder . "$KEY"
+check "folder mode refuses while that user-wide entry exists" "$([ $rc -eq 1 ] && echo yes || echo no)"
+check "folder mode names it in the refusal" "$(has corehost-folder.log 'Symmeno connection for every folder (`old`')"
+check "folder mode changed nothing" "$(cmp -s "$CFG/.claude.json" "$OUT/corehost.before" && echo yes || echo no)"
+connect "$SUB" corehost-replace.log --folder . --replace-user old "$KEY"
+check "--replace-user removes it by the configured Core address" "$([ $rc -eq 0 ] && [ "$(user_servers)" = - ] && echo yes || echo no)"
+
 # 9b. --allow-plugin (0.3): allows the signed-in connection's tools once, touches nothing else.
 seed allowplugin "$T"
 printf '%s\n' '{"theme": "dark", "permissions": {"allow": ["Bash(ls:*)"], "deny": ["Read(/etc/*)"]}}' > "$CFG/settings.json"
@@ -242,6 +255,7 @@ COPY="$SANDBOX/repo-copy"; mkdir -p "$COPY/scripts"; cp "$ROOT/.mcp.json" "$COPY
 sh "$COPY/scripts/set-core-url.sh" "https://trial.example.invalid/mcp" >/dev/null
 check "set-core-url.sh rewrites connect.sh (on a copy)" "$([ "$(sh "$COPY/scripts/set-core-url.sh")" = "https://trial.example.invalid/mcp" ] && echo yes || echo no)"
 check "set-core-url.sh rewrites .mcp.json to the same URL (on a copy)" "$([ "$(python3 -I -c "import json,sys; print(json.load(open(sys.argv[1]))['mcpServers']['sc']['url'])" "$COPY/.mcp.json")" = "https://trial.example.invalid/mcp" ] && echo yes || echo no)"
+check "set-core-url.sh sets CORE_URL_ALT to the same URL (on a copy)" "$([ "$(sed -n 's/^CORE_URL_ALT="\(.*\)"$/\1/p' "$COPY/scripts/connect.sh")" = "https://trial.example.invalid/mcp" ] && echo yes || echo no)"
 check "set-core-url.sh refuses a URL that is not https://.../mcp" "$(sh "$COPY/scripts/set-core-url.sh" "http://evil.example/x" >/dev/null 2>&1 && echo no || echo yes)"
 check "the real repo's URL is untouched" "$([ "$(sh "$ROOT/scripts/set-core-url.sh")" = "$SH_URL" ] && echo yes || echo no)"
 # Release check: what main publishes points at production Core, never a trial or localhost URL left

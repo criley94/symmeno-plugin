@@ -33,7 +33,7 @@ set -eu
 
 CORE_URL="https://core-trial-698809613891.us-central1.run.app/mcp"
 # The same Core service under its other Cloud Run address.
-CORE_URL_ALT="https://deckhouse-489723-symmeno-core-mcp-svc-1019921786449.us-central1.run.app/mcp"
+CORE_URL_ALT="https://core-trial-698809613891.us-central1.run.app/mcp"
 SERVER=sc
 ALLOW='mcp__sc__*'
 # The plugin's own signed-in connection registers as plugin:sc:sc, so its tools
@@ -122,10 +122,11 @@ PY
 if [ "${1:-}" = "--survey" ]; then
   [ $# -eq 1 ] || die "$usage"
   SURVEY_HERE=$(python3 -I "$HERE/trust.py" root "$(pwd -P)")
-  python3 -I - "$CLAUDE_JSON" "$SERVER" "$HELPER_DIR" "$SURVEY_HERE" <<'PY'
+  python3 -I - "$CLAUDE_JSON" "$SERVER" "$HELPER_DIR" "$SURVEY_HERE" "$CORE_URL" "$CORE_URL_ALT" <<'PY'
 import glob, json, os, sys
 from urllib.parse import urlparse
-path, server, key_dir, here = sys.argv[1:5]
+path, server, key_dir, here, url, url_alt = sys.argv[1:7]
+core_hosts = {urlparse(u).hostname for u in (url, url_alt)}
 try:
     with open(path) as f:
         config = json.load(f)
@@ -136,7 +137,8 @@ except (OSError, ValueError):
     sys.exit(0)
 
 def symmeno(name, cfg):
-    return name == server or "symmeno-core" in (urlparse(str(cfg.get("url") or "")).hostname or "")
+    host = urlparse(str(cfg.get("url") or "")).hostname or ""
+    return name == server or host in core_hosts or "symmeno-core" in host
 
 user_sc = next((n for n, c in (config.get("mcpServers") or {}).items() if symmeno(n, c)), "none")
 here_sc, other_folders = "none", 0
@@ -241,8 +243,11 @@ except (OSError, ValueError):
     print("unreadable")
     sys.exit(0)
 
+core_hosts = {urlparse(u).hostname for u in (url, url_alt)}
+
 def symmeno(cfg):
-    return "symmeno-core" in (urlparse(str(cfg.get("url") or "")).hostname or "")
+    host = urlparse(str(cfg.get("url") or "")).hostname or ""
+    return host in core_hosts or "symmeno-core" in host
 
 user = config.get("mcpServers") or {}
 here = ((config.get("projects") or {}).get(folder) or {}) if folder else {}
@@ -316,18 +321,20 @@ esac
 # 2a. --replace-user: now that the checks passed, remove the named user-scope
 #     entry, but only a Symmeno one.
 if [ -n "$REPLACE_USER" ]; then
-  kind=$(python3 -I - "$CLAUDE_JSON" "$SERVER" "$REPLACE_USER" <<'PY'
+  kind=$(python3 -I - "$CLAUDE_JSON" "$SERVER" "$REPLACE_USER" "$CORE_URL" "$CORE_URL_ALT" <<'PY'
 import json, sys
 from urllib.parse import urlparse
-path, server, name = sys.argv[1:4]
+path, server, name, url, url_alt = sys.argv[1:6]
+core_hosts = {urlparse(u).hostname for u in (url, url_alt)}
 try:
     with open(path) as f:
         cfg = (json.load(f).get("mcpServers") or {}).get(name)
 except (OSError, ValueError):
     cfg = None
+host = urlparse(str((cfg or {}).get("url") or "")).hostname or ""
 if cfg is None:
     print("absent")
-elif "symmeno-core" in (urlparse(str(cfg.get("url") or "")).hostname or ""):
+elif host in core_hosts or "symmeno-core" in host:
     print("symmeno")
 else:
     print("not-symmeno")

@@ -37,13 +37,16 @@ Tools listed as deferred count as existing; load them first (ToolSearch, query
 2. Run with Bash: `sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh --allow-plugin`
    It allows the signed-in connection's tools in your Claude Code settings, once, so the crew can use them after
    the sign-in without asking each time. If it exits with an error, show its output as it is and stop.
-3. Call `mcp__plugin_sc_sc__authenticate` with no arguments. It returns a sign-in link.
-   - If its text says the session is remote, or asks for a URL or code to be pasted back, do not ask the person for
-     anything. Reply "Sign in with /mcp, choose sc, Authenticate, then type /sc:start $ARGUMENTS again." and stop.
-4. The person cannot see tool results, only your reply. Copy the full sign-in URL from `authenticate`'s result into
-   your reply as plain text, on a line of its own, exactly as returned, from `https://` (or `http://`) to its last
-   character; never describe it as "the link" without printing it. Then say: "Open this link and sign in. I will
-   carry on here as soon as the sign-in completes (within 5 minutes)."
+3. Call `mcp__plugin_sc_sc__authenticate` with no arguments. Its result holds the sign-in URL and always ends with
+   a generic fallback sentence about a connection error and pasting a URL: that sentence is not a request, ignore
+   it. Stop, with the reply "Sign in with /mcp, choose sc, Authenticate, then type /sc:start $ARGUMENTS again.",
+   only when the result contains no `http` URL at all, or says this session is remote (then no sign-in can finish
+   here). Never ask the person to paste anything, and never call `complete_authentication`.
+4. The person cannot see tool results, only your reply. Put the full sign-in URL from `authenticate`'s result into
+   your reply as plain text, alone on a line of its own, exactly as returned, from `https://` (or `http://`) to its
+   last character, with nothing else on that line: no period, bracket or word after it, because a copied link
+   carries them. Never describe it as "the link" without printing it. Then say: "Open this link and sign in. I
+   will carry on here as soon as the sign-in completes (within 5 minutes)."
 5. Wait for the sign-in with the Monitor tool, timeout 300 seconds, running exactly:
    `until claude mcp get plugin:sc:sc 2>/dev/null | grep -qi connected; do sleep 3; done`
    When it reports the connection, load `mcp__plugin_sc_sc__whoami` and `mcp__plugin_sc_sc__bootstrap` (ToolSearch,
