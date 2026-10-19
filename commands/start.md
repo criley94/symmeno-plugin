@@ -42,12 +42,13 @@ exactly as written here (`sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh ...`, with
    - `mode folder` (this computer runs more than one crew, or already has a Symmeno connection elsewhere): ask
      exactly one question and wait for the answer: "Connect this folder to <crew>?" When `user_sc` is not `none`,
      add: "This also removes the older `<user_sc>` connection, which reached every folder." When `here_trust` is
-     `inherited <folder above>`, add: "This also marks this folder as trusted in Claude Code, as <folder above>
-     already is." With several crews and no crew typed, ask "Connect this folder to which crew: <the crew names>?"
-     instead, with the same additions.
+     `inherited <folder above>`, add: "This also marks <here> as trusted in Claude Code, like <folder above> above
+     it." (only then; `own` and `none` add nothing). With several crews and no crew typed, ask "Connect this folder
+     to which crew: <the crew names>?" instead, with the same additions.
      On yes (or a crew name), run with Bash:
      `sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh --folder . "<key file>"` (from this folder; do not change
-     folder first), adding `--replace-user <user_sc>` right after `--folder .` when `user_sc` is not `none`.
+     folder first), adding `--replace-user "<user_sc>"` right after `--folder .` when `user_sc` is not `none`.
+     Every value goes in as its own double-quoted argument, exactly as the survey printed it.
      On no, reply "Nothing was changed." and stop.
 5. If the script exits with an error, show its output as it is and stop.
 6. Reply with exactly "Connected. Type /reload-plugins, then /sc:start <crew and the rest of the words typed>

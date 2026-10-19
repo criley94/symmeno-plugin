@@ -5,7 +5,8 @@ entry in ~/.claude.json has hasTrustDialogAccepted. A folder that inherits trust
 from a trusted folder above it never gets the trust question, so it has no mark
 of its own. connect.sh mirrors that inherited trust onto the folder, but never
 across a git repository boundary: a repository inside a trusted folder (a fresh
-clone with its own hooks) has to be trusted on its own.
+clone with its own hooks) has to be trusted on its own, exactly as Claude Code's
+own inheritance stops at the repository root.
 
 Inside a git repository Claude Code keeps a folder's settings (local MCP servers,
 trust) under the repository's root, so <folder> below is always that key: the
@@ -19,34 +20,56 @@ Usage:
 
 import json
 import os
+import shutil
+import subprocess
 import sys
 
 
-def root(folder: str) -> str:
+def git_root(folder: str) -> str | None:
+    """The root of the git repository holding folder, or None outside any repository.
+
+    Asks git when it is installed. Any .git entry on the way up counts as a
+    boundary too, so a repository git cannot read still keeps trust out.
+    """
+    if shutil.which("git"):
+        env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+        run = subprocess.run(["git", "-C", folder, "rev-parse", "--show-toplevel"],
+                             capture_output=True, text=True, env=env)
+        if run.returncode == 0 and run.stdout.strip():
+            return os.path.realpath(run.stdout.strip())
     path = folder
     while True:
         if os.path.exists(os.path.join(path, ".git")):
             return path
         parent = os.path.dirname(path)
         if parent == path:
-            return folder
+            return None
         path = parent
+
+
+def root(folder: str) -> str:
+    """Claude Code's project key for folder: its repository root, or itself."""
+    return git_root(folder) or folder
+
+
+def trusted(projects: dict, folder: str) -> bool:
+    return bool((projects.get(folder) or {}).get("hasTrustDialogAccepted"))
 
 
 def state(projects: dict, folder: str) -> tuple[str, str]:
-    if (projects.get(folder) or {}).get("hasTrustDialogAccepted"):
+    if trusted(projects, folder):
         return "own", folder
+    # Trust from above a repository root never reaches inside it.
+    boundary = git_root(folder)
     path = folder
-    while True:
-        # A repository root is a boundary: trust above it does not reach inside.
-        if os.path.exists(os.path.join(path, ".git")):
-            return "none", ""
+    while path != boundary:
         parent = os.path.dirname(path)
         if parent == path:
-            return "none", ""
+            break
         path = parent
-        if (projects.get(path) or {}).get("hasTrustDialogAccepted"):
+        if trusted(projects, path):
             return "inherited", path
+    return "none", ""
 
 
 def load(config_path: str) -> dict:
@@ -69,8 +92,10 @@ def main() -> None:
     if kind == "own":
         return
     if kind == "none":
+        why = " A git repository is trusted on its own, never through the folder above it." \
+            if git_root(folder) == folder else ""
         print(f"Note: Claude Code runs the key helper only in a trusted folder. Start Claude Code once in {folder} "
-              "and accept the trust question.")
+              f"and accept the trust question.{why}")
         return
     # Re-read right before writing, so a concurrent Claude Code save is not lost.
     config = load(config_path)

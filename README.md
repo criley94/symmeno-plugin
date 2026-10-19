@@ -1,6 +1,6 @@
 # Symmeno plugin for Claude Code (`sc`)
 
-Version 0.2.0.
+Version 0.2.1.
 
 Start your Symmeno crew from Claude Code:
 
@@ -41,7 +41,8 @@ The first time in a folder, it connects Symmeno for you instead of starting:
 - **If this computer runs more than one crew**, it asks one question, "Connect this folder to <crew>?", and connects
   only this folder. Until sign-in arrives, one connection reaches one crew, so a crew's key never reaches another
   crew's folders. If an older Symmeno connection covers every folder (for example one named `symmeno`), the
-  question says it will be removed.
+  question says it will be removed. If the folder is not yet trusted in Claude Code but the folder above it is,
+  the question says it will mark this folder trusted too (never for a git repository: see below).
 
 Then it tells you the one step to load the new connection: type `/reload-plugins`, then `/sc:start <crew>` again.
 The crew's lead starts.
@@ -60,8 +61,9 @@ cd ~/nautilus
 sh "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/marketplaces/symmeno/scripts/connect.sh" --folder . ~/.config/symmeno-core/nautilus-team-key
 ```
 
-- `--folder .` connects the folder you are in, and only that one (the script refuses any other folder); leave it
-  out to connect every folder (only on a computer that will only ever run one crew).
+- `--folder .` connects the folder you are in, and only that one (the script refuses any other folder). Inside a
+  git repository that means the whole repository, because Claude Code keeps a repository's local settings under
+  its root. Leave `--folder` out to connect every folder (only on a computer that will only ever run one crew).
 - It registers one Claude Code MCP server named `sc`, installs a small helper at
   `~/.config/symmeno-core/sc-headers` that reads the key file each time Claude Code connects, and allows the `sc`
   tools so memory calls do not ask each time. It never prints the key. Running it again changes nothing.
