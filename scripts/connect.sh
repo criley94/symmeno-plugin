@@ -185,32 +185,92 @@ fi
 # session) it says so and exits 0, and /sc:start shows the link instead.
 if [ "${1:-}" = "--open-link" ]; then
   [ $# -eq 2 ] || die "$usage"
-  verdict=$(python3 -I - "$2" "$CORE_URL" <<'PY'
-import sys
-from urllib.parse import urlparse
-link, core = urlparse(sys.argv[1]), urlparse(sys.argv[2])
-local = core.scheme == "http" and core.hostname in ("localhost", "127.0.0.1")
-if link.scheme != core.scheme or (link.scheme != "https" and not local):
-    print("refused: not an https link")
-elif link.hostname != core.hostname or link.port != core.port:
-    print("refused: not on this Symmeno Core (%s)" % core.netloc)
-elif link.path != "/authorize":
-    print("refused: not the sign-in page")
-else:
-    print("ok")
+  # The script is the boundary (Vera): every check is here, in code. First the
+  # one URL shape that is ever opened; then whether anyone is at this screen;
+  # then at most one open per run; then the open itself, as an argv list.
+  mkdir -p "$HELPER_DIR" && chmod 700 "$HELPER_DIR"
+  python3 -I - "$2" "$CORE_URL" "$HELPER_DIR/open-link.last" "$SHARED_MARKER" <<'PY'
+import os, subprocess, sys, time
+from urllib.parse import parse_qs, urlparse
+
+raw, core_url, stamp, marker = sys.argv[1:5]
+core = urlparse(core_url)
+
+def refuse(why):
+    print(f"refused: {why}. Nothing was opened.")
+    sys.exit(1)
+
+# 1. One URL shape only.
+if len(raw) > 4096:
+    refuse("the link is too long")
+if any(ord(c) < 33 or ord(c) == 127 for c in raw):
+    refuse("the link holds whitespace or a control character")
+link = urlparse(raw)
+local_test_core = core.scheme == "http" and core.hostname in ("localhost", "127.0.0.1")
+if link.scheme != "https" and not (local_test_core and link.scheme == "http"):
+    refuse("not an https link")
+if link.username is not None or link.password is not None:
+    refuse("the link carries a user name")
+if link.hostname != core.hostname:
+    refuse(f"not on this Symmeno Core ({core.hostname})")
+if link.port not in (None, 443) and not (local_test_core and link.port == core.port):
+    refuse("not on this Symmeno Core's port")
+if link.path != "/authorize":
+    refuse("not the sign-in page")
+q = parse_qs(link.query, keep_blank_values=True)
+def one(name):
+    v = q.get(name, [])
+    return v[0] if len(v) == 1 and v[0] else None
+if one("response_type") != "code":
+    refuse("not a sign-in request (response_type)")
+if one("code_challenge_method") != "S256":
+    refuse("not a PKCE S256 request")
+for name in ("client_id", "code_challenge", "state"):
+    if one(name) is None:
+        refuse(f"the link has no single {name}")
+if one("resource") != core_url:
+    refuse("the link is not for this Symmeno Core (resource)")
+back = urlparse(one("redirect_uri") or "")
+if (back.scheme != "http" or back.hostname not in ("localhost", "127.0.0.1") or back.port is None
+        or back.path != "/callback" or back.query or back.username is not None):
+    refuse("the sign-in would not come back to this computer (redirect_uri)")
+
+# 2. Print-only when nobody is at this screen. Never guess: unsure means print only.
+print_only = None
+if any(os.environ.get(v) for v in ("SSH_CONNECTION", "SSH_TTY", "SSH_CLIENT")):
+    print_only = "this is an SSH session"
+elif os.path.exists(marker):
+    print_only = "this is a shared computer"
+elif (os.environ.get("CLAUDE_CODE_ENTRYPOINT") or "").startswith(("sdk", "bench")):
+    print_only = "this session has no screen"
+elif sys.platform != "darwin" and not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+    print_only = "this session has no display"
+if print_only:
+    print(f"No browser can be opened from this session ({print_only}); open the sign-in link yourself.")
+    sys.exit(0)
+
+# 3. At most once per run: a second open within 120 seconds prints only.
+try:
+    if time.time() - os.stat(stamp).st_mtime < 120:
+        print("The sign-in page was opened a moment ago; open the sign-in link yourself if it is not showing.")
+        sys.exit(0)
+except FileNotFoundError:
+    pass
+fd = os.open(stamp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+os.close(fd)
+os.utime(stamp, None)
+
+# 4. Open, as an argv list, never through a shell. The URL is not echoed.
+opener = ["open", raw] if sys.platform == "darwin" else ["xdg-open", raw]
+try:
+    done = subprocess.run(opener, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=20)
+    ok = done.returncode == 0
+except (OSError, subprocess.SubprocessError):
+    ok = False
+print("Opened the sign-in page in your browser." if ok
+      else "No browser could be opened from this session; open the sign-in link yourself.")
 PY
-)
-  case "$verdict" in
-    ok) ;;
-    *) die "$verdict. Nothing was opened." ;;
-  esac
-  if [ "$(uname -s 2>/dev/null)" = Darwin ] && command -v open >/dev/null 2>&1; then
-    open "$2" && { say "Opened the sign-in page in your browser."; exit 0; }
-  elif [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && command -v xdg-open >/dev/null 2>&1; then
-    xdg-open "$2" >/dev/null 2>&1 && { say "Opened the sign-in page in your browser."; exit 0; }
-  fi
-  say "No browser can be opened from this session; open the sign-in link yourself."
-  exit 0
+  exit $?
 fi
 
 FOLDER=

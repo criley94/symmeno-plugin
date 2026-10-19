@@ -1,6 +1,6 @@
 # Symmeno plugin for Claude Code (`sc`)
 
-Version 0.3.4.
+Version 0.3.5.
 
 Start your Symmeno crew from Claude Code:
 

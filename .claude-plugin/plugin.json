@@ -1,6 +1,6 @@
 {
   "name": "sc",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "Start your Symmeno crew in Claude Code: /sc:start and /sc:help, over your Symmeno Core connection.",
   "author": {"name": "Team Nautilus, Hands-On Analytics"},
   "license": "UNLICENSED"

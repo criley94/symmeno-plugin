@@ -218,28 +218,60 @@ check "folder mode changed nothing" "$(cmp -s "$CFG/.claude.json" "$OUT/corehost
 connect "$SUB" corehost-replace.log --folder . --replace-user old "$KEY"
 check "--replace-user removes it by the configured Core address" "$([ $rc -eq 0 ] && [ "$(user_servers)" = - ] && echo yes || echo no)"
 
-# 9c. --open-link (0.3.4): opens only the sign-in page on the configured Core; headless says so.
-CORE=$(sh "$ROOT/scripts/set-core-url.sh"); CORE_ORIGIN=${CORE%/mcp}
-AUTH_URL="$CORE_ORIGIN/authorize?response_type=code&client_id=c1&redirect_uri=http%3A%2F%2Flocalhost%3A5%2Fcallback&state=s&code_challenge=x&code_challenge_method=S256&scope=mcp"
+# 9c. --open-link (0.3.5, Vera's conditions): one URL shape, print-only when nobody is at the screen,
+#     once per run, open as argv. A stub xdg-open on PATH records every open; most cases must record none.
+CORE=$(sh "$ROOT/scripts/set-core-url.sh"); CORE_ORIGIN=${CORE%/mcp}; CORE_HOSTPORT=${CORE_ORIGIN#*://}
+ENC_CORE=$(python3 -I -c "import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=''))" "$CORE")
+GOOD="$CORE_ORIGIN/authorize?response_type=code&client_id=c1&code_challenge=x&code_challenge_method=S256&redirect_uri=http%3A%2F%2Flocalhost%3A5%2Fcallback&state=s&scope=mcp&resource=$ENC_CORE"
+STUBBIN="$SANDBOX/stubbin"; mkdir -p "$STUBBIN"; printf '#!/bin/sh\nprintf %%s "$1" >> "%s/opened.txt"\n' "$SANDBOX" > "$STUBBIN/xdg-open"; chmod +x "$STUBBIN/xdg-open"
+# openlink <log> <env assignments...> -- -u SSH_* and a sandbox marker path, so neither the VM's own SSH
+# session nor the host's real /etc/symmeno/shared-machine ever decides a result
+openlink() { log=$1; shift; (cd "$SUB" && env -u CLAUDECODE -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_PID \
+    -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT -u WAYLAND_DISPLAY \
+    CLAUDE_CODE_ENTRYPOINT=cli PATH="$STUBBIN:$PATH" CLAUDE_CONFIG_DIR="$CFG" SYMMENO_CONFIG_DIR="$KEYS" \
+    SYMMENO_SHARED_MARKER="$SANDBOX/no-such-marker" "$@") > "$OUT/$log" 2>&1; rc=$?; }
+opened() { [ -e "$SANDBOX/opened.txt" ] && cat "$SANDBOX/opened.txt" || printf ''; }
 seed openlink "$T"
-connect "$SUB" openlink-headless.log --open-link "$AUTH_URL"
-check "--open-link, no browser: exits 0 and says to open the link yourself" "$([ $rc -eq 0 ] && grep -q 'No browser can be opened' "$OUT/openlink-headless.log" && echo yes || echo no)"
-# A desktop session: a stub xdg-open on PATH records what it was asked to open.
-STUBBIN="$SANDBOX/stubbin"; mkdir -p "$STUBBIN"; printf '#!/bin/sh\nprintf %%s "$1" > "%s/opened.txt"\n' "$SANDBOX" > "$STUBBIN/xdg-open"; chmod +x "$STUBBIN/xdg-open"
-(cd "$SUB" && env -u CLAUDECODE -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_PID \
-    -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN CLAUDE_CODE_ENTRYPOINT=cli DISPLAY=:9 \
-    PATH="$STUBBIN:$PATH" CLAUDE_CONFIG_DIR="$CFG" SYMMENO_CONFIG_DIR="$KEYS" sh "$CONNECT" --open-link "$AUTH_URL") > "$OUT/openlink-desktop.log" 2>&1
-check "--open-link with a browser: says opened, exits 0" "$(grep -q 'Opened the sign-in page' "$OUT/openlink-desktop.log" && echo yes || echo no)"
-check "--open-link with a browser: opened exactly the given URL" "$([ "$(cat "$SANDBOX/opened.txt" 2>/dev/null)" = "$AUTH_URL" ] && echo yes || echo no)"
-rm -f "$SANDBOX/opened.txt"
-for bad in "https://evil.example/authorize?x=1" "$CORE_ORIGIN/anything?x=1" "http://${CORE_ORIGIN#*://}/authorize?x=1" "${CORE_ORIGIN}.evil.example/authorize"; do
-  (cd "$SUB" && env -u CLAUDECODE -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_PID \
-      -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN CLAUDE_CODE_ENTRYPOINT=cli DISPLAY=:9 \
-      PATH="$STUBBIN:$PATH" CLAUDE_CONFIG_DIR="$CFG" SYMMENO_CONFIG_DIR="$KEYS" sh "$CONNECT" --open-link "$bad") > "$OUT/openlink-bad.log" 2>&1
-  rcb=$?
-  check "--open-link refuses $(printf '%s' "$bad" | cut -c1-60): exit 1, nothing opened" "$([ $rcb -eq 1 ] && grep -q 'Nothing was opened' "$OUT/openlink-bad.log" && [ ! -e "$SANDBOX/opened.txt" ] && echo yes || echo no)"
-done
-check "--open-link refuses a missing or extra argument" "$(connect "$SUB" openlink-args.log --open-link; [ $rc -eq 1 ] && echo yes || echo no)"
+# positive: a display, a good link: opened exactly once, with exactly the given URL, stamp mode 600
+openlink ol-good.log env DISPLAY=:9 sh "$CONNECT" --open-link "$GOOD"
+check "--open-link good: exits 0 and says opened" "$([ $rc -eq 0 ] && grep -q 'Opened the sign-in page' "$OUT/ol-good.log" && echo yes || echo no)"
+check "--open-link good: opened exactly the given URL, once" "$([ "$(opened)" = "$GOOD" ] && echo yes || echo no)"
+check "--open-link good: the once-per-run stamp is mode 600" "$([ "$(stat -c %a "$KEYS/open-link.last" 2>/dev/null || stat -f %Lp "$KEYS/open-link.last")" = 600 ] && echo yes || echo no)"
+# a second call within 120 seconds prints only
+openlink ol-again.log env DISPLAY=:9 sh "$CONNECT" --open-link "$GOOD"
+check "--open-link twice in one run: second call prints only" "$([ $rc -eq 0 ] && grep -q 'opened a moment ago' "$OUT/ol-again.log" && [ "$(opened)" = "$GOOD" ] && echo yes || echo no)"
+rm -f "$SANDBOX/opened.txt" "$KEYS/open-link.last"
+# print-only: nobody at this screen (each with a display and the stub ready, so an open would show)
+openlink ol-ssh.log env DISPLAY=:9 SSH_CONNECTION="1.2.3.4 5 6.7.8.9 22" sh "$CONNECT" --open-link "$GOOD"
+check "--open-link over SSH: prints only, opens nothing" "$([ $rc -eq 0 ] && grep -q 'SSH session' "$OUT/ol-ssh.log" && [ -z "$(opened)" ] && echo yes || echo no)"
+: > "$SANDBOX/shared-machine"
+openlink ol-shared.log env DISPLAY=:9 SYMMENO_SHARED_MARKER="$SANDBOX/shared-machine" sh "$CONNECT" --open-link "$GOOD"
+check "--open-link on a shared computer: prints only, opens nothing" "$([ $rc -eq 0 ] && grep -q 'shared computer' "$OUT/ol-shared.log" && [ -z "$(opened)" ] && echo yes || echo no)"
+openlink ol-sdk.log env DISPLAY=:9 CLAUDE_CODE_ENTRYPOINT=sdk-py sh "$CONNECT" --open-link "$GOOD"
+check "--open-link from an SDK session: prints only, opens nothing" "$([ $rc -eq 0 ] && grep -q 'no screen' "$OUT/ol-sdk.log" && [ -z "$(opened)" ] && echo yes || echo no)"
+openlink ol-nodisplay.log env -u DISPLAY sh "$CONNECT" --open-link "$GOOD"
+check "--open-link without a display: prints only, opens nothing" "$([ $rc -eq 0 ] && grep -q 'no display' "$OUT/ol-nodisplay.log" && [ -z "$(opened)" ] && echo yes || echo no)"
+# refusals: exit 1, "Nothing was opened", nothing recorded (all with a display and the stub ready)
+refuse_case() {  # refuse_case <label> <url>
+  openlink ol-bad.log env DISPLAY=:9 sh "$CONNECT" --open-link "$2"
+  check "--open-link refuses $1" "$([ $rc -eq 1 ] && grep -q 'Nothing was opened' "$OUT/ol-bad.log" && [ -z "$(opened)" ] && echo yes || echo no)"
+}
+refuse_case "another host" "https://evil.example/authorize?response_type=code&client_id=c1&code_challenge=x&code_challenge_method=S256&redirect_uri=http%3A%2F%2Flocalhost%3A5%2Fcallback&state=s&resource=$ENC_CORE"
+refuse_case "a look-alike host" "${CORE_ORIGIN}.evil.example/authorize?response_type=code&client_id=c1&code_challenge=x&code_challenge_method=S256&redirect_uri=http%3A%2F%2Flocalhost%3A5%2Fcallback&state=s&resource=$ENC_CORE"
+refuse_case "http instead of https" "$(printf '%s' "$GOOD" | sed 's#^https://#http://#')"
+refuse_case "userinfo in the host" "https://core@${CORE_HOSTPORT}/authorize?response_type=code&client_id=c1&code_challenge=x&code_challenge_method=S256&redirect_uri=http%3A%2F%2Flocalhost%3A5%2Fcallback&state=s&resource=$ENC_CORE"
+refuse_case "another path" "$CORE_ORIGIN/anything?response_type=code&client_id=c1&code_challenge=x&code_challenge_method=S256&redirect_uri=http%3A%2F%2Flocalhost%3A5%2Fcallback&state=s&resource=$ENC_CORE"
+refuse_case "a missing resource" "$CORE_ORIGIN/authorize?response_type=code&client_id=c1&code_challenge=x&code_challenge_method=S256&redirect_uri=http%3A%2F%2Flocalhost%3A5%2Fcallback&state=s"
+refuse_case "a wrong resource" "$CORE_ORIGIN/authorize?response_type=code&client_id=c1&code_challenge=x&code_challenge_method=S256&redirect_uri=http%3A%2F%2Flocalhost%3A5%2Fcallback&state=s&resource=https%3A%2F%2Fevil.example%2Fmcp"
+refuse_case "response_type=token" "$(printf '%s' "$GOOD" | sed 's/response_type=code/response_type=token/')"
+refuse_case "plain PKCE" "$(printf '%s' "$GOOD" | sed 's/code_challenge_method=S256/code_challenge_method=plain/')"
+refuse_case "a missing state" "$(printf '%s' "$GOOD" | sed 's/&state=s//')"
+refuse_case "a hosted redirect_uri" "$(printf '%s' "$GOOD" | sed 's#redirect_uri=[^&]*#redirect_uri=https%3A%2F%2Fclaude.ai%2Fapi%2Fmcp%2Fauth_callback#')"
+refuse_case "a non-loopback redirect_uri" "$(printf '%s' "$GOOD" | sed 's#redirect_uri=[^&]*#redirect_uri=http%3A%2F%2Fevil.example%3A5%2Fcallback#')"
+refuse_case "a 5,000-character URL" "$GOOD&pad=$(python3 -I -c "print('a' * 5000)")"
+refuse_case "a space in the URL" "$GOOD &x=1"
+check "--open-link refuses a missing or extra argument" "$(connect "$SUB" ol-args.log --open-link; [ $rc -eq 1 ] && echo yes || echo no)"
+rm -f "$SANDBOX/shared-machine"
 
 # 9b. --allow-plugin (0.3): allows the signed-in connection's tools once, touches nothing else.
 seed allowplugin "$T"
