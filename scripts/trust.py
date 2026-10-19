@@ -16,7 +16,12 @@ Usage:
   trust.py root <folder>                  prints the folder's Claude Code project key
   trust.py state <claude.json> <folder>   prints: own | inherited <folder above> | none
   trust.py mark <claude.json> <folder>    marks the folder trusted if its state is inherited
+
+Runs on Python 3.9 (Apple's default): keep the annotations behind the future
+import and use nothing newer than 3.9.
 """
+
+from __future__ import annotations
 
 import json
 import os

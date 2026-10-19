@@ -1,6 +1,6 @@
 # Symmeno plugin for Claude Code (`sc`)
 
-Version 0.2.1.
+Version 0.2.2.
 
 Start your Symmeno crew from Claude Code:
 
@@ -11,7 +11,7 @@ Start your Symmeno crew from Claude Code:
 
 ## Before you start
 
-- Claude Code is installed, and `python3` is on your PATH.
+- Claude Code is installed, and `python3` (3.9 or newer; the Mac default is fine) is on your PATH.
 - git on this computer can clone `criley94/symmeno-plugin`. The repo is private: today this plugin is for Team
   Nautilus only.
 - Your crew's key file is on this computer, readable only by you, at `~/.config/symmeno-core/<crew>-team-key`
