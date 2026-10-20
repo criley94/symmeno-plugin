@@ -206,6 +206,11 @@ if len(raw) > 4096:
 if any(ord(c) < 33 or ord(c) == 127 for c in raw):
     refuse("the link holds whitespace or a control character")
 link = urlparse(raw)
+try:
+    # .port raises ValueError on a malformed port (for example a backslash in it): refuse, never trace.
+    link_port = link.port
+except ValueError:
+    refuse("the link could not be parsed")
 local_test_core = core.scheme == "http" and core.hostname in ("localhost", "127.0.0.1")
 if link.scheme != "https" and not (local_test_core and link.scheme == "http"):
     refuse("not an https link")
@@ -213,7 +218,7 @@ if link.username is not None or link.password is not None:
     refuse("the link carries a user name")
 if link.hostname != core.hostname:
     refuse(f"not on this Symmeno Core ({core.hostname})")
-if link.port not in (None, 443) and not (local_test_core and link.port == core.port):
+if link_port not in (None, 443) and not (local_test_core and link_port == core.port):
     refuse("not on this Symmeno Core's port")
 if link.path != "/authorize":
     refuse("not the sign-in page")
@@ -231,7 +236,11 @@ for name in ("client_id", "code_challenge", "state"):
 if one("resource") != core_url:
     refuse("the link is not for this Symmeno Core (resource)")
 back = urlparse(one("redirect_uri") or "")
-if (back.scheme != "http" or back.hostname not in ("localhost", "127.0.0.1") or back.port is None
+try:
+    back_port = back.port
+except ValueError:
+    refuse("the link could not be parsed (redirect_uri)")
+if (back.scheme != "http" or back.hostname not in ("localhost", "127.0.0.1") or back_port is None
         or back.path != "/callback" or back.query or back.username is not None):
     refuse("the sign-in would not come back to this computer (redirect_uri)")
 

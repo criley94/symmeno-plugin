@@ -270,6 +270,10 @@ refuse_case "a hosted redirect_uri" "$(printf '%s' "$GOOD" | sed 's#redirect_uri
 refuse_case "a non-loopback redirect_uri" "$(printf '%s' "$GOOD" | sed 's#redirect_uri=[^&]*#redirect_uri=http%3A%2F%2Fevil.example%3A5%2Fcallback#')"
 refuse_case "a 5,000-character URL" "$GOOD&pad=$(python3 -I -c "print('a' * 5000)")"
 refuse_case "a space in the URL" "$GOOD &x=1"
+refuse_case "a backslash in the port" "https://${CORE_HOSTPORT%%:*}:\\evil.example/authorize?response_type=code&client_id=c1&code_challenge=x&code_challenge_method=S256&redirect_uri=http%3A%2F%2Flocalhost%3A5%2Fcallback&state=s&resource=$ENC_CORE"
+check "--open-link: a backslash in the port refuses with a line, not a traceback" "$(grep -q 'refused: the link could not be parsed' "$OUT/ol-bad.log" && ! grep -q 'Traceback' "$OUT/ol-bad.log" && echo yes || echo no)"
+refuse_case "a backslash in the redirect_uri port" "$(printf '%s' "$GOOD" | sed 's#redirect_uri=[^&]*#redirect_uri=http%3A%2F%2Flocalhost%3A%5Cevil%2Fcallback#')"
+check "--open-link: a bad redirect_uri port refuses with a line, not a traceback" "$(grep -q 'refused: the link could not be parsed (redirect_uri)' "$OUT/ol-bad.log" && ! grep -q 'Traceback' "$OUT/ol-bad.log" && echo yes || echo no)"
 check "--open-link refuses a missing or extra argument" "$(connect "$SUB" ol-args.log --open-link; [ $rc -eq 1 ] && echo yes || echo no)"
 rm -f "$SANDBOX/shared-machine"
 

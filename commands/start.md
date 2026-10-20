@@ -45,13 +45,16 @@ Tools listed as deferred count as existing; load them first (ToolSearch, query
 4. Open the sign-in page for the person. Run with Bash:
    `sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh --open-link "<the URL from authenticate's result, exactly as returned>"`
    It opens the page in the browser when this session has one (a Mac or a desktop), and otherwise says so. It
-   only ever opens a page on this Symmeno Core; if it refuses, show its output as it is and stop.
-   Then, whatever it printed, the person cannot see tool results, only your reply: put the same full URL into your
-   reply as plain text, alone on a line of its own, exactly as returned, from `https://` (or `http://`) to its
-   last character, with nothing else on that line (no period, bracket or word after it: a copied link carries
-   them). Never write "the link" or "this link" without the URL itself on the line before. Then say: "Sign in on
-   the page that opened (or open the link above). I will carry on here as soon as the sign-in completes (within
-   5 minutes)."
+   only ever opens a page on this Symmeno Core; if it refuses, show its output as it is and stop. Then reply by
+   what it printed:
+   - It printed "Opened the sign-in page in your browser.": do not print the URL. Say: "The sign-in page opened in
+     your browser. Sign in there; I will carry on here as soon as the sign-in completes (within 5 minutes)."
+   - Anything else (no browser here, or the page was opened a moment ago): the person cannot see tool results,
+     only your reply, so your reply must carry the link. Write exactly three lines: first "Open this link and sign
+     in:", then the full URL alone on the second line, exactly as returned, from `https://` (or `http://`) to its
+     last character, and end that line right after the URL (no period, bracket, quote or word after it: a copied
+     link carries them), then "I will carry on here as soon as the sign-in completes (within 5 minutes)." on the
+     third line. Never write "the link" or "this link" without the URL itself on its own line.
 5. Wait for the sign-in with the Monitor tool, timeout 300 seconds, running exactly:
    `until claude mcp get plugin:sc:sc 2>/dev/null | grep -qi connected; do sleep 3; done`
    When it reports the connection, load `mcp__plugin_sc_sc__whoami` and `mcp__plugin_sc_sc__bootstrap` (ToolSearch,
