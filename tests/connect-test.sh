@@ -319,7 +319,7 @@ check "set-core-url.sh refuses a URL that is not https://.../mcp" "$(sh "$COPY/s
 check "the real repo's URL is untouched" "$([ "$(sh "$ROOT/scripts/set-core-url.sh")" = "$SH_URL" ] && echo yes || echo no)"
 # Release check: what main publishes points at production Core, never a trial or localhost URL left
 # by set-core-url.sh. Other branches (a trial build) may point elsewhere, but only over https.
-PROD_URL="https://deckhouse-489723-symmeno-core-mcp-svc-clfxlhbjsa-uc.a.run.app/mcp"
+PROD_URL="https://app.symmeno.com/mcp"
 BRANCH=$(git -C "$ROOT" branch --show-current 2>/dev/null || echo "")
 if [ "$BRANCH" = main ]; then
   check "release: main's .mcp.json URL is production Core" "$([ "$MCP_URL" = "$PROD_URL" ] && echo yes || echo no)"

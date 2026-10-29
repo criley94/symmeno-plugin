@@ -32,9 +32,9 @@
 # config holds only two paths: the helper's and the key file's.
 set -eu
 
-CORE_URL="https://core-trial-698809613891.us-central1.run.app/mcp"
+CORE_URL="https://app.symmeno.com/mcp"
 # The same Core service under its other Cloud Run address.
-CORE_URL_ALT="https://core-trial-698809613891.us-central1.run.app/mcp"
+CORE_URL_ALT="https://app.symmeno.com/mcp"
 SERVER=sc
 ALLOW='mcp__sc__*'
 # The plugin's own signed-in connection registers as plugin:sc:sc, so its tools

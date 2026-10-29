@@ -2,7 +2,7 @@
   "mcpServers": {
     "sc": {
       "type": "http",
-      "url": "https://core-trial-698809613891.us-central1.run.app/mcp"
+      "url": "https://app.symmeno.com/mcp"
     }
   }
 }
