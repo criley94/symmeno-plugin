@@ -34,10 +34,8 @@ Tools listed as deferred count as existing; load them first (ToolSearch, query
 1. Run with Bash: `sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh --survey` and read its `shared` and `shared_marker`
    lines.
    - `shared yes`: this computer is marked as shared, so nobody signs in here: a sign-in's last step has to come back
-     to this computer, and your browser is on another one. Reply "This computer is marked as shared (it has the file
-     <shared_marker>), so Symmeno uses crew key files here, not a personal sign-in. To sign in as yourself, open
-     Claude on your own computer and type /sc:start there." and then do "Connecting this folder with a crew key"
-     below. Do not call `authenticate` here.
+     to this computer, and your browser is on another one. Do not call `authenticate`. Do "Connecting this folder
+     with a crew key" below; its first step says how to tell the person why.
 2. Run with Bash: `sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh --allow-plugin`
    It allows the signed-in connection's tools in your Claude Code settings, once, so the crew can use them after
    the sign-in without asking each time. If it exits with an error, show its output as it is and stop.
@@ -78,7 +76,9 @@ exactly as written here (`sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh ...`, with
    `app terminal` or `app unknown` (which Claude Code is running), `here_scratch yes` or `here_scratch no`
    (whether this folder is a throwaway workspace of the desktop app rather than a folder the person chose), and
    `shared yes` or `shared no` (whether this computer is marked as shared), and `shared_marker <path>` (the file
-   that marks it).
+   that marks it). When `shared` is `yes`, begin your reply, whatever the steps below end with, with "This computer
+   is marked as shared (it has the file <shared_marker>), so Symmeno uses crew key files here, not a personal
+   sign-in. To sign in as yourself, open Claude on your own computer."
 2. If `here_sc` is not `none`, or `user_sc` is `sc`, Symmeno is already set up here but did not load. Reply
    "Symmeno is set up here but did not load. Check that your crew's key file is still in place, then type /mcp,
    choose sc, pick Reconnect, and type /sc:start $ARGUMENTS again." and stop. (Reconnect also clears a stale
@@ -88,9 +88,8 @@ exactly as written here (`sh ${CLAUDE_PLUGIN_ROOT}/scripts/connect.sh ...`, with
      ~/.config/symmeno-core/; ask the person who manages your team's Symmeno account for it." and stop.
    - A word 1 was typed: use the `crew` line whose name equals it, ignoring case. If none does, reply "This
      computer has key files for: <the crew names>. Type /sc:start with one of them." and stop. When `shared` is
-     `yes`, reply instead "This computer is marked as shared (it has the file <shared_marker>), so it starts only
-     crews it has a key file for: <the crew names>. To start <word 1>, open Claude on your own computer and type
-     /sc:start <word 1> there." and stop.
+     `yes`, say instead "It has key files for: <the crew names>. To start <word 1>, type /sc:start <word 1> on your
+     own computer." and stop.
    - No words typed: use the only crew if there is one. With several, step 4's question asks which.
 4. Connect.
    - `mode user` (one crew, and no other Symmeno connection on this computer): do not ask. Run with Bash:
