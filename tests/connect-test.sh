@@ -204,6 +204,7 @@ check "survey: shared no without the marker" "$(has shared-no.log '^shared no$')
 : > "$SANDBOX/shared-machine"
 survey_with_marker "$SANDBOX/shared-machine" shared-yes.log
 check "survey: shared yes with the marker" "$(has shared-yes.log '^shared yes$')"
+check "survey: names the marker file it checked" "$(has shared-yes.log "^shared_marker $SANDBOX/shared-machine\$")"
 
 # 9a. A user-wide entry at the configured Core address counts as Symmeno whatever its name and even when the
 #     host does not contain "symmeno-core" (a trial Core): the survey reports it and folder mode refuses.

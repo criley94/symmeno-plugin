@@ -20,7 +20,7 @@ Start your Symmeno crew from Claude Code:
 In Claude Code, type:
 
 ```
-/plugin marketplace add criley94/symmeno-plugin
+/plugin marketplace add https://symmeno.com/plugin/marketplace.json
 /plugin install sc@symmeno
 ```
 

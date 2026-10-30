@@ -168,6 +168,8 @@ PY
   printf 'app %s\n' "$APP"
   printf 'here_scratch %s\n' "$(is_scratch "$SURVEY_HERE")"
   if [ -e "$SHARED_MARKER" ]; then printf 'shared yes\n'; else printf 'shared no\n'; fi
+  # The file that decides it, so /sc:start can name it when it says why it uses crew keys.
+  printf 'shared_marker %s\n' "$SHARED_MARKER"
   exit 0
 fi
 
