@@ -1,0 +1,28 @@
+{
+  "description": "sc: in a Symmeno session, restate the agent's reply tag on each of the person's turns and after a compaction or a resume; silent everywhere else",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/reply-tag.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/reply-tag.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
