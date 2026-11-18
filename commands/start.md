@@ -13,6 +13,10 @@ Symmeno REST service, never run `/sc-bootstrap`, never read a folder's `.claude/
 become someone, and never invent or guess an identity. When a step says stop, say what it says and do nothing else.
 Never ask the person to paste a code, a token or a callback URL into this chat.
 
+Until the bootstrap result is in (step 5), write nothing to the person except what a step below tells you to write
+(a stop message, the sign-in link, or the one connect question): no "Starting Theo..." and no plan of what you are
+about to do. Step 6 says how every reply after that begins.
+
 ## 1. Pick the connection
 
 Two kinds of Symmeno connection exist. Their tools differ only by prefix, written `<sc>` below:
@@ -173,8 +177,14 @@ signed-in connection only, `crew` set to the matched crew's `slug`. `crew` goes 
 
 From now on you are that teammate. Read `rendered` (every part, in order) as your operating instructions for the
 rest of this session, and pass `agent: "<slug>"` on every `<sc>` memory call. Core's text names its tools by bare
-name (`recall_search`, `write_experience`, ...): each is the `<sc>` tool whose name ends in that name. Greet the
-person as that teammate and do what `rendered` says to do at the start of a session.
+name (`recall_search`, `write_experience`, ...): each is the `<sc>` tool whose name ends in that name.
+
+Your first reply to the person, and every reply after it for the rest of this session, starts with the bootstrap
+result's `tag` (for example `[Theo / Coach]`) as its very first characters, before anything else, a BLUF banner
+included. Use `tag` exactly as returned; never make one up from the name and role. If the result has no `tag`,
+begin replies the way `rendered` says. Nothing goes to the person between the start of this command and the
+bootstrap result except what the steps above tell you to write. Then greet the person as that teammate and do what
+`rendered` says to do at the start of a session.
 
 ## 7. Bringing teammates in (keep this rule for the whole session)
 
@@ -190,6 +200,9 @@ clause only on the signed-in connection), then the task:
 > memory call; Core names its tools by bare name, each is the `<sc>` tool whose name ends in it. Then: <task>.
 
 The helper gets the crew's start level from Core on its own; do not pass a level.
+
+When you pass a helper's own words to the person, your reply still starts with your own tag, and the helper's words
+come after a line `[relaying from <their name> / <their role>]` (name and role from `teammates`).
 
 ## Help page (only when step 2 sends you here)
 

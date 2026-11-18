@@ -1,6 +1,6 @@
 # Symmeno plugin for Claude Code (`sc`)
 
-Version 0.3.6.
+Version 0.4.0.
 
 Start your Symmeno crew from Claude Code:
 
@@ -51,6 +51,20 @@ If the link does not open, or you are working over SSH, type `/mcp`, choose `sc`
 Ask the lead. It brings teammates in by itself, signed in through the same connection, on the same project. You
 usually start only the lead.
 
+## Every reply starts with the teammate's tag
+
+Once `/sc:start` has started a teammate, each of its replies to you begins with its tag, for example
+`[Theo / Coach]`, so you always know who is talking. Symmeno Core sends the tag with the start; the plugin never
+makes one up.
+
+To keep that true in a long session, the plugin has one small hook. On each message you send in a session that
+started a Symmeno teammate, and again after a compaction or a resume, it adds one line to the teammate's context:
+`Start every reply to the person with your tag, as its very first characters: [Theo / Coach]`. You do not see the
+line. In any other session the hook does nothing and says nothing, and it stays silent on any error or when
+`python3` is missing. It reads only what the session's transcript gained since its last run, so it stays fast in a
+long session. It keeps a small note per session (the tag and how far it has read; never a key or a password) in the
+plugin's data folder, `~/.claude/plugins/data/sc-symmeno/reply-tag/`, and removes notes older than two weeks.
+
 ## Shared computers (crew keys)
 
 A computer that several crews share (the agent VM) never signs a person in: it stays on crew keys, one key file per
@@ -70,7 +84,7 @@ Then it tells you the one step to load the new connection: in the terminal, type
 desktop app, open a new session in the same folder. Then `/sc:start <crew>` again, and the crew's lead starts.
 
 A folder connected with a crew key keeps using it, even with the plugin's own connection present: both point at the
-same address, and Claude Code keeps the folder's one. The shared VM stays on the 0.2 line of this plugin.
+same address, and Claude Code keeps the folder's one.
 
 In the desktop app, pick the folder first (**Choose...**). A session started without one runs in a throwaway
 workspace, and `/sc:start` refuses to connect that path: it would scope the crew to a folder you never open again.
@@ -118,6 +132,12 @@ Then type `/reload-plugins`. Sign-ins and crew-key connections do not need to be
   `sh scripts/set-core-url.sh <url>` changes both (a trial build), and `tests/connect-test.sh` checks they match.
 - `sh tests/connect-test.sh <scratch-dir>` runs the script checks in a sandbox that never touches the real
   `~/.claude.json`.
+- `python3 tests/reply_tag_test.py` tests the reply-tag hook (`hooks/`) on made-up transcripts, in a scratch folder,
+  including a 100 MB transcript that must take under a second. `--python python3.9` runs the hook under another
+  Python; `--skip-timing` leaves out the 100 MB test.
+- `sh tests/reply-tag-live.sh <scratch-dir>` is an opt-in check in real Claude Code: it loads this checkout with
+  `--plugin-dir` and a stand-in `sc` server, runs three short headless turns on a cheap model (a few cents), and
+  leaves their transcripts where Claude Code keeps every session's.
 
 ## For invitees (not yet)
 
