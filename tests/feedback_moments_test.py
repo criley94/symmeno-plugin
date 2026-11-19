@@ -209,8 +209,8 @@ class Case(unittest.TestCase):
         self.assertEqual((p.returncode, p.stderr), (0, b""))
         self.assertEqual(json.loads(p.stdout.decode()), {"decision": "block", "reason": reason})
 
-    def assertSilent(self, p):
-        self.assertEqual((p.returncode, p.stdout, p.stderr), (0, b"", b""))
+    def assertSilent(self, p, msg=None):
+        self.assertEqual((p.returncode, p.stdout, p.stderr), (0, b"", b""), msg)
 
     def state(self):
         with open(os.path.join(self.data, "feedback-moments", self.session + ".json")) as f:
@@ -326,6 +326,31 @@ class HelperMoments(Case):
         h.tool("mcp__sc__recall_search", {"agent": "priya-analyst", "query": "spec"})
         h.tool("SendMessage", {"to": "main", "message": "lab/STRATEGY_SPEC.md"})
         self.assertSilent(self.stop_hook(h, agent_type="priya", last="Answered."))
+
+    def test_2_1_teammate_reply_alone_is_not_work(self):
+        """Dante's precision: a run whose only tool calls are its reply (SendMessage), loading tools, to-do or task
+        bookkeeping, or Symmeno tools is no work, so the teammate is not asked again."""
+        h = self.helper(agent_id="apriya-92e9552c7bc934b7", teammate=True)
+        h.tool("Read", {"file_path": "lab/STRATEGY_SPEC.md"})
+        h.tool("SendMessage", {"to": "main", "message": "Questions. How did I do?"})
+        self.assertSilent(self.stop_hook(h, agent_type="priya", last="Sent."))
+        self.teammate_message(h, "Which file was the second question from?")
+        h.tool("SendMessage", {"to": "main", "message": "lab/STRATEGY_SPEC.md, section 3."})
+        self.assertSilent(self.stop_hook(h, agent_type="priya", last="Answered."))
+        for name in ("ToolSearch", "TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet",
+                     "mcp__sc__write_experience", "mcp__plugin_sc_sc__recall_search"):
+            self.teammate_message(h, "One more thing (%s)." % name)
+            h.tool(name, {})
+            h.tool("SendMessage", {"to": "main", "message": "Done."})
+            self.assertSilent(self.stop_hook(h, agent_type="priya", last="Done."), name)
+
+    def test_2_1_teammate_any_other_tool_is_work(self):
+        for n, name in enumerate(("Read", "Bash", "Edit", "Agent", "WebFetch", "ListAgents", "TaskStop",
+                                  "mcp__other__thing")):
+            h = self.helper(agent_id="apriya-%016d" % n, teammate=True)
+            h.tool(name, {})
+            h.tool("SendMessage", {"to": "main", "message": "Done."})
+            self.assertBlock(self.stop_hook(h, agent_type="priya", last="Done."), TEAMMATE_LINE)
 
     def test_2_1_teammate_asked_then_worked_again(self):
         h = self.helper(agent_id="apriya-92e9552c7bc934b7", teammate=True)
@@ -600,7 +625,7 @@ class CloseAndAnswer(Case):
         self.person("fine")
         self.write_lesson()
         for name in ("mcp__sc__recall_search", "mcp__plugin_sc_sc__feedback_read", "ToolSearch", "SendMessage",
-                     "TaskList"):
+                     "TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet"):
             self.main.tool(name, {})
         self.assertSilent(self.person("thanks again"))
 

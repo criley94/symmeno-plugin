@@ -47,10 +47,11 @@ ANSWER_PROMPTS = 3  # the answer stays due for this many person prompts, or unti
 
 SYMMENO_PREFIXES = ("mcp__sc__", "mcp__plugin_sc_sc__")
 WRITE_TOOLS = ("mcp__sc__write_experience", "mcp__plugin_sc_sc__write_experience")
-# Tools that move messages or load tools rather than do work: never a piece of work on their own (re-arm, and the
-# teammate's work gate). ToolSearch matters most: the sc tools are often deferred, so writing the lesson loads them.
-COORDINATION = {"ToolSearch", "SendMessage", "ListAgents", "TaskCreate", "TaskGet", "TaskList", "TaskUpdate",
-                "TaskOutput", "TaskStop"}
+# Not work (Dante, round 3 precision): besides the Symmeno tools, sending a message, loading tools, and to-do or task
+# bookkeeping. Used by the teammate's work gate and by the re-arm. SendMessage matters for teammates: a teammate's
+# own reply is a SendMessage, and counting it as work would bring the re-ask loop back. ToolSearch matters for the
+# re-arm: the sc tools are often deferred, so writing the lesson loads them.
+COORDINATION = {"SendMessage", "ToolSearch", "TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet"}
 ONE_SHOT_TYPES = ("Explore", "Plan")
 AGENT_TOOLS = ("Agent", "Task")
 

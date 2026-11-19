@@ -82,7 +82,8 @@ when the grade arrives. The plugin adds nothing there.
 
 Once per piece of work:
 - A helper the lead started is reminded once per job it was given. A teammate is reminded only after it did real
-  work (a tool call outside Symmeno, other than loading tools or sending messages) and has not asked since. A
+  work (a tool call outside Symmeno, other than sending a message, loading tools, or to-do and task bookkeeping) and
+  has not asked since. A
   helper that is receiving its grade is never reminded.
 - The lead gets its line once per report that asks. It gets none for a report from a helper that was just
   receiving its grade.
