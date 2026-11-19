@@ -337,7 +337,7 @@ class HelperMoments(Case):
         self.teammate_message(h, "Which file was the second question from?")
         h.tool("SendMessage", {"to": "main", "message": "lab/STRATEGY_SPEC.md, section 3."})
         self.assertSilent(self.stop_hook(h, agent_type="priya", last="Answered."))
-        for name in ("ToolSearch", "TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet",
+        for name in ("ListAgents", "ToolSearch", "TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet",
                      "mcp__sc__write_experience", "mcp__plugin_sc_sc__recall_search"):
             self.teammate_message(h, "One more thing (%s)." % name)
             h.tool(name, {})
@@ -345,7 +345,7 @@ class HelperMoments(Case):
             self.assertSilent(self.stop_hook(h, agent_type="priya", last="Done."), name)
 
     def test_2_1_teammate_any_other_tool_is_work(self):
-        for n, name in enumerate(("Read", "Bash", "Edit", "Agent", "WebFetch", "ListAgents", "TaskStop",
+        for n, name in enumerate(("Read", "Bash", "Edit", "Agent", "WebFetch", "TaskStop", "TaskOutput",
                                   "mcp__other__thing")):
             h = self.helper(agent_id="apriya-%016d" % n, teammate=True)
             h.tool(name, {})
@@ -625,7 +625,7 @@ class CloseAndAnswer(Case):
         self.person("fine")
         self.write_lesson()
         for name in ("mcp__sc__recall_search", "mcp__plugin_sc_sc__feedback_read", "ToolSearch", "SendMessage",
-                     "TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet"):
+                     "ListAgents", "TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet"):
             self.main.tool(name, {})
         self.assertSilent(self.person("thanks again"))
 
