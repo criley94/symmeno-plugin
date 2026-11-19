@@ -1,6 +1,6 @@
 # Symmeno plugin for Claude Code (`sc`)
 
-Version 0.5.0.
+Version 0.5.1.
 
 Start your Symmeno crew from Claude Code:
 
@@ -75,7 +75,7 @@ four moments, so a piece of work ends with a question, a grade and a lesson. You
 | A Symmeno teammate hands work back without asking how it did | that teammate | `If you just finished a piece of work, send your report again in full and end it with one line asking the teammate who gave you the work: How did I do?` (a helper the lead started) or `If you just finished a piece of work, send the teammate who gave you the work one more line: How did I do?` (an agent-team teammate) |
 | That report reaches the lead, asking "How did I do?" | the lead | `Priya asked for your feedback on that work: read the bar (feedback_read), grade only what you saw, then send it (feedback_give).` |
 | You close or approve a piece of work ("thanks", "looks good", "ship it", "that's all for today") | the agent you are talking to | `If you just finished a piece of work with the person, end this reply by asking them how you did.` |
-| Your next messages after it asked (up to three, until it writes its lesson) | the same agent | `If the person just told you how you did, reflect on what it says about how you worked and, before you reply, write to Core as a lesson (write_experience) what you'll keep doing and what you'll do differently. It's the only way you get better.` |
+| Your next messages after it asked (up to three, until it writes its lesson after your answer) | the same agent | `If the person just told you how you did, reflect on what it says about how you worked and, before you reply, write to Core as a lesson (write_experience) what you'll keep doing and what you'll do differently. It's the only way you get better.` |
 
 After the lead grades a helper, Symmeno Core's reply tells it to pass the grade on, and the helper writes its lesson
 when the grade arrives. The plugin adds nothing there.
@@ -86,9 +86,10 @@ Once per piece of work:
   bookkeeping) and has not asked since. A helper that is receiving its grade is never reminded.
 - The lead gets its line once per report that asks. It gets none for a report from a helper that was just
   receiving its grade.
-- The close line comes once. It comes again only after the agent has written its lesson (or the three messages
-  have passed) and has done more work. A string of "thanks", "perfect", "good night" asks once. "Hey!" or "Good
-  morning" on its own never counts. Neither does "ok" inside a longer message ("ok, now read the next file").
+- The close line comes once. It comes again only after the agent has written its lesson after your answer (or the
+  three messages have passed) and has done more work. A note the agent writes while it asks never counts as that
+  lesson (0.5.1). A string of "thanks", "perfect", "good night" asks once. "Hey!" or "Good morning" on its own never
+  counts. Neither does "ok" inside a longer message ("ok, now read the next file").
 
 Only your own messages count. Not: a helper's report, a teammate's message, another session's message, or a slash
 command. A `/loop` or scheduled prompt looks like one of yours and can count. That gap is known: the lines only say

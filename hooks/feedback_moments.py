@@ -6,7 +6,7 @@ on UserPromptSubmit, SubagentStop and PostToolUse of the Agent tool. At four mom
 - a Symmeno helper hands back without asking how it did: SubagentStop keeps it going once with the helper line;
 - a helper's report reaches the lead with the ask: the lead line (Agent result, <task-notification>, <agent-message>);
 - the person closes or approves a piece of work: the close line;
-- the person's next messages (up to three, until the agent writes a lesson): the answer line.
+- the person's next messages (up to three, until the agent writes after the answer arrives): the answer line.
 
 A Symmeno helper is a subagent or teammate whose own transcript holds a successful Symmeno sign-in with a tag. A
 Symmeno session is one the reply-tag hook (reply_tag.py) has a tag for; this hook reads that hook's state and
@@ -373,8 +373,8 @@ def moments_dir():
 
 
 def fresh_state(session):
-    return {"v": STATE_VERSION, "session": session, "armed": True, "answer_left": 0, "mark": None, "work": False,
-            "wrote": False, "lead_keys": []}
+    return {"v": STATE_VERSION, "session": session, "armed": True, "answer_left": 0, "answer_from": None,
+            "mark": None, "work": False, "wrote": False, "lead_keys": []}
 
 
 def load_state(path, session):
@@ -384,7 +384,9 @@ def load_state(path, session):
     except (OSError, ValueError):
         return fresh_state(session)
     mark = st.get("mark") if isinstance(st, dict) else None
+    since = st.get("answer_from") if isinstance(st, dict) else None  # absent in 0.5.0's notes: not opened yet
     ok = (isinstance(st, dict) and st.get("v") == STATE_VERSION and st.get("session") == session
+          and (since is None or (isinstance(since, int) and not isinstance(since, bool) and since >= 0))
           and isinstance(st.get("armed"), bool) and isinstance(st.get("work"), bool)
           and isinstance(st.get("wrote"), bool)
           and isinstance(st.get("answer_left"), int) and 0 <= st["answer_left"] <= ANSWER_PROMPTS
@@ -392,7 +394,10 @@ def load_state(path, session):
           and (mark is None or (isinstance(mark, dict) and isinstance(mark.get("transcript"), str)
                                 and isinstance(mark.get("ino"), int) and isinstance(mark.get("offset"), int)
                                 and mark["offset"] >= 0)))
-    return st if ok else fresh_state(session)
+    if not ok:
+        return fresh_state(session)
+    st.setdefault("answer_from", None)
+    return st
 
 
 def save_state(session, st):
@@ -412,8 +417,10 @@ def mark_here(transcript):
 
 
 def catch_up(st, transcript, deadline):
-    """Read the main conversation's tool calls since the mark: any work re-arms later, a write_experience ends the
-    answer window. A rewritten or other file tells nothing: the mark moves to its end."""
+    """Read the main conversation's tool calls since the mark: any work re-arms later, and a write_experience ends the
+    answer window, but only one made after the answer arrived (answer_from, Dante's round 5): a note written in the
+    asking turn, or anything before the answer, never counts. A rewritten or other file tells nothing: the mark (and
+    an open window's start) moves to its end."""
     mark = st.get("mark")
     if not mark:
         return
@@ -423,6 +430,8 @@ def catch_up(st, transcript, deadline):
         return
     if mark["transcript"] != transcript or mark["ino"] != info.st_ino or info.st_size < mark["offset"]:
         st["mark"] = mark_here(transcript)
+        if st.get("answer_from") is not None:
+            st["answer_from"] = st["mark"]["offset"]
         return
     if info.st_size == mark["offset"]:
         return
@@ -444,7 +453,8 @@ def catch_up(st, transcript, deadline):
             for b in e["message"].get("content") or []:
                 if isinstance(b, dict) and b.get("type") == "tool_use":
                     if b.get("name") in WRITE_TOOLS:
-                        st["wrote"] = True
+                        if st.get("answer_from") is not None and s >= st["answer_from"]:
+                            st["wrote"] = True
                     elif is_work(b.get("name")):
                         st["work"] = True
         mark["offset"] = cut
@@ -543,6 +553,14 @@ def on_prompt(hook, deadline):
         return None  # nothing could fire on this prompt: no reads, no writes
     if not lead_tag(session, transcript, deadline):
         return None
+    if st["answer_left"] and st["answer_from"] is None:
+        # The first person prompt after the close line: the answer window opens here. Only a write after this point
+        # closes it (Dante's round 5: Theo's close-out note, written in the asking turn, must not).
+        try:
+            st["answer_from"] = mark_here(transcript)["offset"]
+        except OSError:
+            st["answer_from"] = st["mark"]["offset"] if st["mark"] else 0
+        st["wrote"] = False
     catch_up(st, transcript, deadline)
     if st["wrote"]:
         st["answer_left"] = 0
@@ -553,7 +571,8 @@ def on_prompt(hook, deadline):
         st["answer_left"] -= 1
         line = ANSWER_LINE
     elif st["armed"] and close:
-        st.update(armed=False, answer_left=ANSWER_PROMPTS, work=False, wrote=False, mark=mark_here(transcript))
+        st.update(armed=False, answer_left=ANSWER_PROMPTS, answer_from=None, work=False, wrote=False,
+                  mark=mark_here(transcript))
         line = CLOSE_LINE
     save_state(session, st)
     return context("UserPromptSubmit", line) if line else None

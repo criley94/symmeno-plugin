@@ -598,6 +598,66 @@ class CloseAndAnswer(Case):
         self.write_lesson()
         self.assertSilent(self.person("Perfect, thank you."))
 
+    def close_note_and_ask(self):
+        """Theo's 6.6 turn (Theta ebdbe83e): on the close line he loads the tool, re-binds, writes a close-out note,
+        then asks how he did, all in the asking turn."""
+        self.main.tool("ToolSearch", {"query": "select:mcp__sc__write_experience"})
+        self.main.tool("mcp__sc__bootstrap", {"agent": "theo-coach", "resume_session_id": "ada5246b"})
+        self.main.tool("mcp__sc__write_experience", {"agent": "theo-coach", "observation_type": "open_question"})
+        self.main.say("[Theo / Coach] Nothing's backed up yet; that's first next time.\n\nHow did I do today?")
+
+    def test_2_3_round5_close_note_then_ask_then_answer(self):
+        """Round 5: a write in the asking turn never closes the window; the answer gets the answer line."""
+        self.assertLine(self.person("Thanks, that's all for today."), "UserPromptSubmit", CLOSE_LINE)
+        self.close_note_and_ask()
+        self.assertLine(self.person("Clear, but too long. Shorter next time."), "UserPromptSubmit", ANSWER_LINE)
+        self.write_lesson()
+        self.assertSilent(self.person("ok sure"))
+
+    def test_2_3_round5_answer_then_lesson_then_next_prompt(self):
+        """Round 5: a write after the answer closes the window; the next prompt gets no answer line."""
+        self.assertLine(self.person("thanks"), "UserPromptSubmit", CLOSE_LINE)
+        self.main.say("[Theo / Coach] How did I do?")
+        self.assertLine(self.person("Too long."), "UserPromptSubmit", ANSWER_LINE)
+        self.write_lesson()
+        self.main.say("[Theo / Coach] Noted: shorter next time.")
+        self.assertSilent(self.person("And the risks file, where is it?"))
+
+    def test_2_3_round5_note_before_a_late_answer(self):
+        """A close-out note, then "one sec", then the real answer: the line on both; only the write after closes."""
+        self.person("thanks")
+        self.close_note_and_ask()
+        self.assertLine(self.person("one sec, reading it"), "UserPromptSubmit", ANSWER_LINE)
+        self.main.say("[Theo / Coach] Take your time.")
+        self.assertLine(self.person("Too long, but the structure was right."), "UserPromptSubmit", ANSWER_LINE)
+        self.write_lesson()
+        self.assertSilent(self.person("good night"))
+
+    def test_2_3_round5_thanks_perfect_good_night_with_a_close_note(self):
+        self.assertLine(self.person("thanks"), "UserPromptSubmit", CLOSE_LINE)
+        self.close_note_and_ask()
+        self.assertLine(self.person("perfect"), "UserPromptSubmit", ANSWER_LINE)
+        self.write_lesson()
+        self.assertSilent(self.person("good night"))
+
+    def test_2_3_round5_three_prompt_limit_unchanged(self):
+        self.person("thanks")
+        self.close_note_and_ask()
+        for prompt in ("hm", "one sec", "still reading"):
+            self.assertLine(self.person(prompt), "UserPromptSubmit", ANSWER_LINE)
+        self.assertSilent(self.person("ok, thanks"))
+
+    def test_2_3_round5_note_from_0_5_0_carries_on(self):
+        """A 0.5.0 note (no answer_from) that already saw the close-out write: the answer still gets its line."""
+        self.person("thanks")
+        self.close_note_and_ask()
+        st = self.state()
+        del st["answer_from"]
+        st["wrote"] = True
+        with open(os.path.join(self.data, "feedback-moments", self.session + ".json"), "w") as f:
+            json.dump(st, f)
+        self.assertLine(self.person("Clear, but too long."), "UserPromptSubmit", ANSWER_LINE)
+
     def test_2_3_a_helpers_lesson_does_not_end_it(self):
         self.person("thanks")
         self.assertLine(self.person("one sec"), "UserPromptSubmit", ANSWER_LINE)
@@ -680,7 +740,8 @@ class CloseAndAnswer(Case):
         self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o600)
         self.assertLess(os.path.getsize(path), 2048)
         st = self.state()
-        self.assertEqual(sorted(st), ["answer_left", "armed", "lead_keys", "mark", "session", "v", "work", "wrote"])
+        self.assertEqual(sorted(st), ["answer_from", "answer_left", "armed", "lead_keys", "mark", "session", "v", "work",
+                                      "wrote"])
         self.assertEqual((st["armed"], st["answer_left"]), (False, 3))
 
     def test_2_3_state_in_the_claude_config_folder_without_plugin_data(self):
@@ -820,10 +881,10 @@ class Packaging(unittest.TestCase):
         with open(os.path.join(ROOT, ".claude-plugin", "plugin.json")) as f:
             manifest = json.load(f)
         self.assertEqual(manifest["hooks"], "./hooks/feedback-moments.json")
-        self.assertEqual(manifest["version"], "0.5.0")
+        self.assertEqual(manifest["version"], "0.5.1")
         with open(os.path.join(ROOT, ".claude-plugin", "marketplace.json")) as f:
             (entry,) = json.load(f)["plugins"]
-        self.assertEqual(entry["version"], "0.5.0")
+        self.assertEqual(entry["version"], "0.5.1")
 
     def test_2_6_hooks_file_runs_the_launcher_on_the_three_events(self):
         with open(os.path.join(ROOT, "hooks", "feedback-moments.json")) as f:
