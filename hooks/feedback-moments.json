@@ -1,0 +1,39 @@
+{
+  "description": "sc: the feedback moments (a helper asks how it did, the lead is told to grade, the person is asked after a close, the agent writes a lesson on the answer); silent everywhere else",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/feedback-moments.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/feedback-moments.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^(Agent|Task)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/feedback-moments.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

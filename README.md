@@ -1,6 +1,6 @@
 # Symmeno plugin for Claude Code (`sc`)
 
-Version 0.4.0.
+Version 0.5.0.
 
 Start your Symmeno crew from Claude Code:
 
@@ -64,6 +64,42 @@ line. In any other session the hook does nothing and says nothing, and it stays 
 `python3` is missing. It reads only what the session's transcript gained since its last run, so it stays fast in a
 long session. It keeps a small note per session (the tag and how far it has read; never a key or a password) in the
 plugin's data folder, `~/.claude/plugins/data/sc-symmeno/reply-tag/`, and removes notes older than two weeks.
+
+## Asking how it went, and learning from the answer
+
+Your crew gets better only from what it writes down. From 0.5.0 the plugin adds one line to an agent's context at
+four moments, so a piece of work ends with a question, a grade and a lesson. You do not see these lines.
+
+| When | Who gets the line | The line |
+|---|---|---|
+| A Symmeno teammate hands work back without asking how it did | that teammate | `If you just finished a piece of work, send your report again in full and end it with one line asking the teammate who gave you the work: How did I do?` (a helper the lead started) or `If you just finished a piece of work, send the teammate who gave you the work one more line: How did I do?` (an agent-team teammate) |
+| That report reaches the lead, asking "How did I do?" | the lead | `Priya asked for your feedback on that work: read the bar (feedback_read), grade only what you saw, then send it (feedback_give).` |
+| You close or approve a piece of work ("thanks", "looks good", "ship it", "that's all for today") | the agent you are talking to | `If you just finished a piece of work with the person, end this reply by asking them how you did.` |
+| Your next messages after it asked (up to three, until it writes its lesson) | the same agent | `If the person just told you how you did, reflect on what it says about how you worked and, before you reply, write to Core as a lesson (write_experience) what you'll keep doing and what you'll do differently. It's the only way you get better.` |
+
+After the lead grades a helper, Symmeno Core's reply tells it to pass the grade on, and the helper writes its lesson
+when the grade arrives. The plugin adds nothing there.
+
+Once per piece of work:
+- A helper the lead started is reminded once per job it was given. A teammate is reminded only after it did real
+  work (a tool call outside Symmeno, other than loading tools or sending messages) and has not asked since. A
+  helper that is receiving its grade is never reminded.
+- The lead gets its line once per report that asks. It gets none for a report from a helper that was just
+  receiving its grade.
+- The close line comes once. It comes again only after the agent has written its lesson (or the three messages
+  have passed) and has done more work. A string of "thanks", "perfect", "good night" asks once. "Hey!" or "Good
+  morning" on its own never counts. Neither does "ok" inside a longer message ("ok, now read the next file").
+
+Only your own messages count. Not: a helper's report, a teammate's message, another session's message, or a slash
+command. A `/loop` or scheduled prompt looks like one of yours and can count. That gap is known: the lines only say
+what to do *if* the moment is real.
+
+The same promises as the tag hook. Outside a session that started a Symmeno teammate, for a helper that never signed
+in to Symmeno, and on any error (or with no `python3`), these hooks do nothing and say nothing. They never change the
+tag hook's files or its notes. They keep a small note per session (whether a close is armed, how many answer lines
+are left, how far they have read since the close, and which reports they answered; never a key or a password) in
+`~/.claude/plugins/data/sc-symmeno/feedback-moments/`, and remove notes older than two weeks. The hooks are in
+`hooks/feedback-moments.json` (named by `.claude-plugin/plugin.json`), beside the tag hook's `hooks/hooks.json`.
 
 ## Shared computers (crew keys)
 
@@ -138,6 +174,11 @@ Then type `/reload-plugins`. Sign-ins and crew-key connections do not need to be
 - `sh tests/reply-tag-live.sh <scratch-dir>` is an opt-in check in real Claude Code: it loads this checkout with
   `--plugin-dir` and a stand-in `sc` server, runs three short headless turns on a cheap model (a few cents), and
   leaves their transcripts where Claude Code keeps every session's.
+- `python3 tests/feedback_moments_test.py` tests the feedback-moments hooks on made-up transcripts in the shapes
+  Claude Code writes, including 100 MB timing runs. `--python python3.9` and `--skip-timing` work the same way.
+- `sh tests/feedback-moments-live.sh <scratch-dir>` is the opt-in live check for those hooks. It runs four headless
+  turns on a cheap model against a stand-in `sc` server (`tests/fake_sc_crew_server.py`): a helper reminded to ask,
+  the lead line, the close line, the answer line, and a plain session that gets nothing.
 
 ## For invitees (not yet)
 
